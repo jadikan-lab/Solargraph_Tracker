@@ -64,6 +64,8 @@
   <span id="driveInfo" style="margin-left:8px;font-size:0.85rem;color:#cfe8ff"></span>
   <button id="authBtn">Connexion Google</button>
   <button id="checkDriveBtn" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Vérifier Drive</button>
+  <button id="publishBtn" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Publier sur Mon Drive</button>
+  <label style="margin-left:8px;font-size:0.85rem;color:#cfe8ff"><input type="checkbox" id="autoPublishToggle" style="margin-right:6px"/>Auto-publish</label>
 </div>
 
 <div id="tabs">
@@ -112,7 +114,8 @@
 const GOOGLE_CLIENT_ID = '724133061731-g3lmkdkm84ejd2utads9a0i2sj63m1j9.apps.googleusercontent.com'
 // ══════════════════════════════════════════════════════════
 
-const DRIVE_SCOPE    = 'https://www.googleapis.com/auth/drive.appdata'
+// request both appData (hidden) and drive.file (visible files in My Drive)
+const DRIVE_SCOPE    = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file'
 const DRIVE_FILENAME = 'solargraph_entries.json'
 const IDB_KEY        = 'solar_entries_v3'
 
@@ -183,6 +186,12 @@ async function saveAndSync(arr) {
   allEntries = arr
   await localSave(arr)
   if (gToken) { try { await driveWrite(arr) } catch(e) { console.error('Drive write:', e) } }
+  // if auto-publish enabled, also publish visible files to My Drive
+  try{
+    if (gToken && localStorage.getItem('autoPublish')==='1') {
+      await publishEntriesToMyDrive(allEntries)
+    }
+  }catch(e){console.error('publish to MyDrive failed',e)}
   renderAll()
 }
 
@@ -312,6 +321,94 @@ async function checkDriveStatus(){
 }
 
 document.getElementById('checkDriveBtn').addEventListener('click',checkDriveStatus)
+
+// ── Publish visible copies to My Drive (optional) ───────────────────
+async function driveFindFolder(name){
+  const q = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents`)
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
+  const d = await r.json()
+  return d.files && d.files[0] ? d.files[0].id : null
+}
+async function driveCreateFolder(name){
+  const meta = { name, mimeType: 'application/vnd.google-apps.folder', parents: ['root'] }
+  const r = await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},body:JSON.stringify(meta)})
+  return (await r.json()).id
+}
+async function uploadDataURLToFolder(dataURL, filename, folderId){
+  const binStr = atob(dataURL.split(',')[1])
+  const len = binStr.length
+  const u8 = new Uint8Array(len)
+  for(let i=0;i<len;i++) u8[i]=binStr.charCodeAt(i)
+  const blob = new Blob([u8],{type:'image/jpeg'})
+  const bnd = 'up_'+Date.now()
+  const meta = JSON.stringify({ name: filename, parents: [folderId] })
+  const body = `--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${bnd}\r\nContent-Type: image/jpeg\r\n\r\n` + await blob.arrayBuffer() + `\r\n--${bnd}--`
+  // use fetch with blob body: build multipart using FormData is easier
+  const fd = new FormData();
+  fd.append('metadata', new Blob([meta],{type:'application/json'}));
+  fd.append('file', blob, filename)
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
+  return await r.json()
+}
+async function uploadJSONToFolder(obj, filename, folderId){
+  const content = JSON.stringify(obj)
+  const fd = new FormData();
+  fd.append('metadata', new Blob([JSON.stringify({name:filename, parents:[folderId]})],{type:'application/json'}));
+  fd.append('file', new Blob([content],{type:'application/json'}), filename)
+  // try to find existing file and PATCH it instead of creating another
+  const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents`)
+  const r0 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
+  const d0 = await r0.json()
+  if(d0.files && d0.files[0]){
+    const id = d0.files[0].id
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,{method:'PATCH',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},body:content})
+    return {id}
+  } else {
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
+    return await r.json()
+  }
+}
+
+async function publishEntriesToMyDrive(entries){
+  if(!gToken) throw new Error('Not authenticated')
+  const folderName = 'Solargraph_Tracker'
+  let folderId = await driveFindFolder(folderName)
+  if(!folderId) folderId = await driveCreateFolder(folderName)
+  // upload photos and collect fileIds
+  for(const e of entries){
+    e.myDrivePhotos = e.myDrivePhotos || []
+    for(let i=0;i<(e.photos||[]).length;i++){
+      const url = e.photos[i]
+      const fname = `${e.id}_${i}.jpg`
+      // naive upload each time - could check existing but ok for now
+      const res = await uploadDataURLToFolder(url,fname,folderId)
+      if(res && res.id) e.myDrivePhotos.push({fileId:res.id, name:res.name, webViewLink:res.webViewLink})
+    }
+    if(e.finalPhotoDataURL){
+      const resf = await uploadDataURLToFolder(e.finalPhotoDataURL,`${e.id}_final.jpg`,folderId)
+      if(resf && resf.id) e.myDriveFinal = {fileId:resf.id, name:resf.name, webViewLink:resf.webViewLink}
+    }
+  }
+  // upload metadata file
+  const metaRes = await uploadJSONToFolder(entries, 'solargraph_entries.json', folderId)
+  return {folderId, metaRes}
+}
+
+document.getElementById('publishBtn').addEventListener('click', async ()=>{
+  if(!gToken){ alert('Connecte-toi d\u2019abord à Google.'); return }
+  if(!confirm('Publier une copie visible de toutes les entrées sur Mon Drive (dossier Solargraph_Tracker) ?')) return
+  try{
+    const res = await publishEntriesToMyDrive(allEntries)
+    alert('Publier terminé')
+    lastDriveSync = Date.now(); localStorage.setItem('lastDriveSync',String(lastDriveSync)); updateDriveInfo();
+  }catch(e){alert('Erreur de publication: '+(e.message||e)); console.error(e)}
+})
+
+// auto-publish toggle wiring
+const autoToggle = document.getElementById('autoPublishToggle')
+try{ autoToggle.checked = localStorage.getItem('autoPublish')==='1' }catch(e){}
+autoToggle.addEventListener('change',()=>{ try{ localStorage.setItem('autoPublish', autoToggle.checked?'1':'0') }catch(e){} })
+
 
 // ── Photos ────────────────────────────────────────────────
 document.getElementById('addPhotoBtn').addEventListener('click', ()=>document.getElementById('photoInput').click())
