@@ -195,14 +195,22 @@ function initGoogleAuth() {
       if (resp.error) { alert('Erreur auth Google: ' + resp.error); return }
       gToken = resp.access_token
       updateAuthUI(true)
+      try{ localStorage.setItem('gsi_granted','1') }catch(e){}
       await syncFromDrive()
       renderAll()
     }
   })
+  // If the user previously granted access, try to silently obtain a fresh token
+  try{
+    if (localStorage.getItem('gsi_granted')) {
+      // requestAccessToken without a user gesture may succeed silently if session valid
+      window.tokenClient.requestAccessToken();
+    }
+  }catch(e){console.warn('silent token request failed',e)}
 }
 document.getElementById('authBtn').addEventListener('click', () => {
   if (gToken) {
-    google.accounts.oauth2.revoke(gToken, () => { gToken = null; updateAuthUI(false) })
+    google.accounts.oauth2.revoke(gToken, () => { gToken = null; try{localStorage.removeItem('gsi_granted')}catch(e){}; updateAuthUI(false) })
   } else {
     if (window.tokenClient) window.tokenClient.requestAccessToken()
     else alert('SDK Google non chargé, attends 2s et réessaie')
