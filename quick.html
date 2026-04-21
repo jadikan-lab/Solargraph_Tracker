@@ -1,126 +1,317 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Solargraph Tracker</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,-apple-system,Roboto,sans-serif;height:100dvh;display:flex;flex-direction:column;background:#f4f4f6}
-    #header{background:#1a1a2e;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0}
-    #header h1{font-size:1.05rem;flex:1}
-    #authStatus{font-size:0.75rem;color:#9ecaff;white-space:nowrap}
-    #authBtn{background:#0366d6;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:0.85rem;white-space:nowrap}
-    #tabs{display:flex;background:#fff;border-bottom:2px solid #e0e0e0;flex-shrink:0}
-    .tab{flex:1;padding:11px 4px;text-align:center;border:none;background:none;cursor:pointer;font-size:0.9rem;color:#666;border-bottom:3px solid transparent;margin-bottom:-2px}
-    .tab.active{color:#0366d6;border-bottom-color:#0366d6;font-weight:700}
-    .panel{display:none;flex:1;overflow:auto;flex-direction:column;min-height:0}
-    .panel.active{display:flex}
-    #panelForm{padding:14px;gap:10px}
-    #panelList{padding:12px;gap:8px}
-    #panelMap{padding:0}
-    #map{flex:1;min-height:0}
-    .btn-photo{display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;color:#0366d6;border:2px dashed #0366d6;border-radius:10px;padding:14px;font-size:1.05rem;cursor:pointer;width:100%;font-weight:600}
-    .btn-photo:active{background:#e8f0fe}
-    .btn-save{display:flex;align-items:center;justify-content:center;gap:8px;background:#28a745;color:#fff;border:none;border-radius:10px;padding:14px;font-size:1.1rem;font-weight:700;cursor:pointer;width:100%;margin-top:4px}
-    .btn-save:active{background:#218838}
-    .field label{display:block;font-size:0.8rem;font-weight:600;color:#444;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
-    .field select,.field textarea{width:100%;padding:9px 10px;border:1px solid #ccc;border-radius:8px;font-size:1rem;background:#fff}
-    .field textarea{resize:vertical}
-    #photosPreview{display:flex;flex-wrap:wrap;gap:6px}
-    .photo-thumb{position:relative}
-    .photo-thumb img{width:76px;height:76px;object-fit:cover;border-radius:8px;display:block}
-    .photo-thumb .del{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.75rem;line-height:20px;text-align:center;padding:0}
-    #geoStatus{font-size:0.85rem;padding:6px 10px;background:#fff;border-radius:8px;border:1px solid #e0e0e0}
-    #geoStatus.ok{color:#28a745;border-color:#28a745}
-    #geoStatus.err{color:#dc3545;border-color:#dc3545}
-    .entry-card{background:#fff;border:1px solid #e6e6e6;border-radius:10px;padding:10px;flex-shrink:0}
-    .entry-card.retrieved{opacity:.65}
-    .entry-head{display:flex;gap:10px}
-    .entry-thumb img{width:72px;height:72px;object-fit:cover;border-radius:8px;display:block}
-    .entry-info{flex:1;min-width:0}
-    .entry-date{font-weight:700;font-size:0.9rem}
-    .entry-meta{font-size:0.82rem;color:#555;margin-top:2px}
-    .entry-notes{font-size:0.82rem;color:#333;margin-top:4px;font-style:italic}
-    .retrieved-badge{color:#28a745;font-size:0.82rem;margin-top:3px;font-weight:600}
-    .entry-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
-    .btn-xs{background:#fff;border:1px solid #ccc;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:0.8rem}
-    .btn-xs.danger{color:#dc3545;border-color:#dc3545}
-    #storageBar{font-size:0.75rem;color:#888;text-align:right;flex-shrink:0}
-    #exportRow{display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;padding-top:6px;border-top:1px solid #eee;margin-top:auto}
-    .btn-out{background:#fff;border:1px solid #ccc;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:0.82rem}
-    .btn-danger-sm{background:#dc3545;color:#fff;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:0.82rem}
-    .empty{text-align:center;color:#aaa;padding:32px;font-size:0.95rem}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Solargraph Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{
+  --blue:#0366d6;--green:#28a745;--red:#dc3545;--dark:#1a1a2e;
+  --bg:#f0f2f5;--card:#fff;--border:#e2e6ea;
+  --radius:12px;--tab-h:56px;--header-h:56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);display:flex;flex-direction:column;height:100dvh}
+
+/* ── Header ── */
+#header{
+  background:var(--dark);color:#fff;
+  height:var(--header-h);padding:0 12px;
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+#header h1{font-size:1rem;font-weight:700;flex:1;letter-spacing:.01em}
+#authDot{width:10px;height:10px;border-radius:50%;background:#555;flex-shrink:0}
+#authDot.ok{background:#4caf50}
+#gearBtn{
+  background:none;border:none;color:#fff;font-size:1.5rem;
+  cursor:pointer;padding:6px;border-radius:8px;line-height:1;
+}
+#gearBtn:active{background:rgba(255,255,255,.15)}
+
+/* ── Settings drawer ── */
+#drawerOverlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;
+  display:none;opacity:0;transition:opacity .25s;
+}
+#drawerOverlay.open{display:block;opacity:1}
+#drawer{
+  position:fixed;top:0;right:-320px;width:300px;max-width:90vw;height:100%;
+  background:#fff;z-index:101;padding:0;
+  transition:right .25s ease;display:flex;flex-direction:column;
+  box-shadow:-4px 0 20px rgba(0,0,0,.25);
+}
+#drawer.open{right:0}
+#drawerHead{
+  background:var(--dark);color:#fff;padding:16px;
+  display:flex;align-items:center;gap:8px;
+}
+#drawerHead h2{font-size:1rem;flex:1}
+#drawerClose{background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;padding:4px}
+#drawerBody{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.d-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.d-label{font-size:0.8rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;flex:1}
+.d-status{font-size:0.82rem;color:#555}
+.d-btn{
+  width:100%;padding:13px 12px;border:none;border-radius:var(--radius);
+  font-size:0.95rem;font-weight:700;cursor:pointer;text-align:center;
+}
+.d-btn.primary{background:var(--blue);color:#fff}
+.d-btn.success{background:var(--green);color:#fff}
+.d-btn.danger{background:var(--red);color:#fff}
+.d-btn.outline{background:#fff;color:#333;border:1.5px solid var(--border)}
+.d-btn:active{filter:brightness(.9)}
+.toggle-row{display:flex;align-items:center;gap:10px;padding:4px 0}
+.toggle-row label{flex:1;font-size:0.95rem}
+.toggle{position:relative;width:46px;height:26px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#ccc;border-radius:13px;transition:.2s}
+.slider:before{content:'';position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:var(--green)}
+.toggle input:checked+.slider:before{transform:translateX(20px)}
+#pubProgress{width:100%;height:8px;border-radius:4px;display:none}
+#pubStatus{font-size:0.8rem;color:#555;text-align:center;min-height:18px}
+
+/* ── Tabs ── */
+#tabs{
+  display:flex;background:#fff;
+  border-bottom:2px solid var(--border);flex-shrink:0;
+  box-shadow:0 1px 4px rgba(0,0,0,.06);
+}
+.tab{
+  flex:1;height:var(--tab-h);border:none;background:none;cursor:pointer;
+  font-size:0.95rem;color:#777;
+  border-bottom:3px solid transparent;margin-bottom:-2px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+}
+.tab .tab-icon{font-size:1.25rem;line-height:1}
+.tab .tab-lbl{font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* ── Panels ── */
+.panel{display:none;flex:1;overflow-y:auto;flex-direction:column;min-height:0;overscroll-behavior:contain}
+.panel.active{display:flex}
+#panelForm{padding:14px;gap:12px}
+#panelList{padding:12px;gap:10px}
+#panelMap{padding:0}
+#map{flex:1;min-height:0;height:100%}
+
+/* ── Form ── */
+.btn-photo{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  background:#fff;color:var(--blue);border:2.5px dashed var(--blue);
+  border-radius:var(--radius);padding:18px;font-size:1.05rem;
+  cursor:pointer;width:100%;font-weight:700;min-height:64px;
+}
+.btn-photo:active{background:#e8f0fe}
+.btn-save{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  background:var(--green);color:#fff;border:none;
+  border-radius:var(--radius);padding:18px;font-size:1.1rem;
+  font-weight:700;cursor:pointer;width:100%;min-height:64px;
+}
+.btn-save:active{filter:brightness(.9)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:0.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em}
+.field select,.field textarea{
+  width:100%;padding:13px 12px;
+  border:1.5px solid var(--border);border-radius:var(--radius);
+  font-size:1rem;background:#fff;
+  -webkit-appearance:none;appearance:none;
+}
+.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue)}
+.field textarea{resize:vertical;min-height:72px}
+#photosPreview{display:flex;flex-wrap:wrap;gap:8px}
+.photo-thumb{position:relative}
+.photo-thumb img{width:88px;height:88px;object-fit:cover;border-radius:10px;display:block}
+.photo-thumb .del{
+  position:absolute;top:4px;right:4px;
+  background:rgba(0,0,0,.7);color:#fff;border:none;
+  border-radius:50%;width:24px;height:24px;
+  cursor:pointer;font-size:0.85rem;line-height:24px;text-align:center;padding:0;
+}
+#geoStatus{
+  font-size:0.88rem;padding:10px 12px;
+  background:#fff;border-radius:var(--radius);
+  border:1.5px solid var(--border);
+}
+#geoStatus.ok{color:var(--green);border-color:var(--green)}
+#geoStatus.err{color:var(--red);border-color:var(--red)}
+
+/* ── List ── */
+.entry-card{
+  background:var(--card);border:1.5px solid var(--border);
+  border-radius:var(--radius);padding:12px;flex-shrink:0;
+}
+.entry-card.retrieved{border-color:#b2dfdb;background:#f0faf8}
+.entry-head{display:flex;gap:10px}
+.entry-thumb img{
+  width:80px;height:80px;object-fit:cover;border-radius:10px;display:block;
+}
+.entry-info{flex:1;min-width:0}
+.entry-date{font-weight:700;font-size:0.95rem}
+.entry-chip{
+  display:inline-block;background:#e8f0fe;color:var(--blue);
+  border-radius:6px;padding:2px 7px;font-size:0.78rem;font-weight:700;
+  margin-right:4px;margin-top:4px;
+}
+.entry-chip.green{background:#e8f5e9;color:var(--green)}
+.entry-meta{font-size:0.82rem;color:#666;margin-top:3px}
+.entry-notes{font-size:0.82rem;color:#333;margin-top:5px;font-style:italic}
+.retrieved-badge{color:var(--green);font-size:0.82rem;margin-top:4px;font-weight:700}
+.entry-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.btn-xs{
+  border-radius:8px;padding:9px 12px;cursor:pointer;
+  font-size:0.85rem;font-weight:600;border:1.5px solid var(--border);
+  background:#fff;color:#333;
+}
+.btn-xs.danger{color:var(--red);border-color:var(--red)}
+.btn-xs:active{filter:brightness(.9)}
+#storageBar{font-size:0.75rem;color:#999;text-align:center;flex-shrink:0;padding:4px 0}
+#exportRow{
+  display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;
+  padding:10px 0 4px;border-top:1px solid var(--border);
+}
+.btn-out{
+  flex:1;padding:11px;border:1.5px solid var(--border);border-radius:10px;
+  background:#fff;cursor:pointer;font-size:0.85rem;font-weight:600;text-align:center;
+}
+.btn-danger-sm{
+  flex:1;padding:11px;border:none;border-radius:10px;
+  background:var(--red);color:#fff;cursor:pointer;
+  font-size:0.85rem;font-weight:600;
+}
+.empty{text-align:center;color:#bbb;padding:40px 20px;font-size:0.95rem}
+
+/* ── Toast ── */
+#toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);
+  background:#333;color:#fff;padding:12px 20px;border-radius:var(--radius);
+  font-size:0.9rem;z-index:200;opacity:0;transition:transform .25s,opacity .25s;
+  max-width:90vw;text-align:center;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
 </head>
 <body>
 
+<!-- Header -->
 <div id="header">
   <h1>🌞 Solargraph Tracker</h1>
-  <span id="authStatus"></span>
-  <span id="driveInfo" style="margin-left:8px;font-size:0.85rem;color:#cfe8ff"></span>
-  <button id="authBtn">Connexion Google</button>
-  <button id="checkDriveBtn" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Vérifier Drive</button>
-  <button id="publishBtn" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Publier sur Mon Drive</button>
-  <label style="margin-left:8px;font-size:0.85rem;color:#cfe8ff"><input type="checkbox" id="autoPublishToggle" style="margin-right:6px"/>Auto-publish</label>
-  <span id="publishStatus" style="margin-left:8px;font-size:0.85rem;color:#cfe8ff"></span>
-  <progress id="publishProgress" value="0" max="100" style="width:160px;margin-left:8px;vertical-align:middle"></progress>
-  <button id="resetDriveLinks" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Réinitialiser liens Drive</button>
+  <div id="authDot" title="Déconnecté"></div>
+  <button id="gearBtn" title="Paramètres">⚙️</button>
 </div>
 
+<!-- Settings drawer -->
+<div id="drawerOverlay"></div>
+<div id="drawer">
+  <div id="drawerHead">
+    <h2>⚙️ Paramètres Drive</h2>
+    <button id="drawerClose">✕</button>
+  </div>
+  <div id="drawerBody">
+    <div class="d-row">
+      <span class="d-label">Compte</span>
+      <span id="authStatus" class="d-status">Déconnecté</span>
+    </div>
+    <button id="authBtn" class="d-btn primary">Connexion Google</button>
+
+    <hr style="border:none;border-top:1px solid #eee">
+
+    <div class="d-row">
+      <span class="d-label">Sync appData</span>
+      <span id="driveInfo" class="d-status">—</span>
+    </div>
+    <button id="checkDriveBtn" class="d-btn outline">🔍 Vérifier Drive caché</button>
+
+    <hr style="border:none;border-top:1px solid #eee">
+
+    <div class="toggle-row">
+      <label for="autoPublishToggle">Auto-publish sur Mon Drive</label>
+      <label class="toggle">
+        <input type="checkbox" id="autoPublishToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <button id="publishBtn" class="d-btn success">📤 Publier sur Mon Drive</button>
+    <progress id="pubProgress" value="0" max="100"></progress>
+    <div id="pubStatus"></div>
+    <button id="resetDriveLinks" class="d-btn outline">🔄 Réinitialiser liens Drive</button>
+  </div>
+</div>
+
+<!-- Tabs -->
 <div id="tabs">
-  <button class="tab active" data-tab="panelForm">📷 Ajouter</button>
-  <button class="tab" data-tab="panelList">📋 Liste</button>
-  <button class="tab" data-tab="panelMap">🗺 Carte</button>
+  <button class="tab active" data-tab="panelForm">
+    <span class="tab-icon">📷</span><span class="tab-lbl">Ajouter</span>
+  </button>
+  <button class="tab" data-tab="panelList">
+    <span class="tab-icon">📋</span><span class="tab-lbl">Liste</span>
+  </button>
+  <button class="tab" data-tab="panelMap">
+    <span class="tab-icon">🗺</span><span class="tab-lbl">Carte</span>
+  </button>
 </div>
 
+<!-- Panel Form -->
 <div id="panelForm" class="panel active">
   <button class="btn-photo" id="addPhotoBtn">📷 Ajouter photo(s) sténopé</button>
   <input id="photoInput" type="file" accept="image/*" capture="environment" style="display:none" multiple>
   <div id="photosPreview"></div>
-  <div class="field"><label>Type de boîte</label><select id="boxType"><option>full</option><option>medium</option><option>small</option></select></div>
-  <div class="field"><label>Diamètre trou (mm)</label><select id="hole"><option>0.26</option><option>0.4</option><option>0.5</option></select></div>
+  <div class="field">
+    <label>Type de boîte</label>
+    <select id="boxType"><option>full</option><option>medium</option><option>small</option></select>
+  </div>
+  <div class="field">
+    <label>Diamètre trou (mm)</label>
+    <select id="hole"><option>0.26</option><option>0.4</option><option>0.5</option></select>
+  </div>
   <div class="field">
     <label>Type de papier</label>
     <select id="paperType">
       <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option>
     </select>
   </div>
-  <div class="field"><label>Notes</label><textarea id="notes" rows="2" placeholder="Orientation, lieu, conditions…"></textarea></div>
+  <div class="field">
+    <label>Notes</label>
+    <textarea id="notes" placeholder="Orientation, lieu, conditions…"></textarea>
+  </div>
   <div id="geoStatus">📍 Géoloc en attente…</div>
   <button class="btn-save" id="saveBtn">💾 Enregistrer le sténopé</button>
 </div>
 
+<!-- Panel List -->
 <div id="panelList" class="panel">
   <div id="storageBar"></div>
   <div id="list"></div>
   <div id="exportRow">
     <button class="btn-out" id="exportJson">⬇ JSON</button>
     <button class="btn-out" id="exportKml">⬇ KML</button>
-    <button class="btn-danger-sm" id="clearAll">🗑 Tout supprimer</button>
+    <button class="btn-danger-sm" id="clearAll">🗑 Tout effacer</button>
   </div>
 </div>
 
+<!-- Panel Map -->
 <div id="panelMap" class="panel">
   <div id="map"></div>
 </div>
 
+<!-- Toast -->
+<div id="toast"></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ══════════════════════════════════════════════════════════
-// CONFIG — Remplace par ton Google OAuth2 Client ID
-// Voir README.md section "Sync Google Drive" pour l'obtenir
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
 const GOOGLE_CLIENT_ID = '724133061731-g3lmkdkm84ejd2utads9a0i2sj63m1j9.apps.googleusercontent.com'
-// ══════════════════════════════════════════════════════════
-
-// request both appData (hidden) and drive.file (visible files in My Drive)
 const DRIVE_SCOPE    = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file'
 const DRIVE_FILENAME = 'solargraph_entries.json'
 const IDB_KEY        = 'solar_entries_v3'
+const UPLOAD_CONCURRENCY = 3   // parallel uploads at a time
 
 localforage.config({ name: 'solargraph_trk' })
 
@@ -131,355 +322,358 @@ let pendingPhotos = []
 let currentLoc   = null
 let lastDriveSync = null
 
-// ── Local IndexedDB ─────────────────────────────────────
-async function localLoad() {
-  try { return (await localforage.getItem(IDB_KEY)) || [] } catch { return [] }
+// ── Toast ─────────────────────────────────────────────
+let _toastTimer = null
+function toast(msg, duration=2500){
+  const el = document.getElementById('toast')
+  el.textContent = msg; el.classList.add('show')
+  if(_toastTimer) clearTimeout(_toastTimer)
+  _toastTimer = setTimeout(()=>el.classList.remove('show'), duration)
 }
-async function localSave(arr) { await localforage.setItem(IDB_KEY, arr) }
 
-// ── Google Drive ─────────────────────────────────────────
-async function driveFind() {
+// ── IndexedDB ─────────────────────────────────────────
+async function localLoad(){ try{ return (await localforage.getItem(IDB_KEY))||[] }catch{ return [] } }
+async function localSave(arr){ await localforage.setItem(IDB_KEY, arr) }
+
+// ── Helpers ───────────────────────────────────────────
+function sanitize(s){ return (s||'').toString().replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_\-.]/g,'') }
+function entryFilename(e, idx, isFinal=false){
+  const d = new Date(e.createdAt||Date.now())
+  const dd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const suf = isFinal ? 'final' : String(idx)
+  return `${dd}_${sanitize(e.boxType)}_${sanitize(e.paperType)}_${sanitize(e.holeDiameter_mm)}_${suf}.jpg`
+}
+
+// ── Drive appData (hidden sync) ───────────────────────
+async function driveFind(){
   const q = encodeURIComponent(`name='${DRIVE_FILENAME}'`)
-  const r = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}`,
-    { headers: { Authorization: `Bearer ${gToken}` } })
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
   const d = await r.json()
   return d.files && d.files[0] ? d.files[0].id : null
 }
-async function driveRead(fid) {
-  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fid}?alt=media`,
-    { headers: { Authorization: `Bearer ${gToken}` } })
+async function driveRead(fid){
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fid}?alt=media`,{headers:{Authorization:`Bearer ${gToken}`}})
   return r.json()
 }
-async function driveWrite(entries) {
+async function driveWrite(entries){
   const content = JSON.stringify(entries)
-  if (driveFileId) {
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': 'application/json' },
-      body: content
-    })
-    lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
+  if(driveFileId){
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,{
+      method:'PATCH',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},body:content})
   } else {
-    const bnd = 'solar_bnd_' + Date.now()
-    const meta = JSON.stringify({ name: DRIVE_FILENAME, parents: ['appDataFolder'] })
+    const bnd = 'solar_bnd_'+Date.now()
+    const meta = JSON.stringify({name:DRIVE_FILENAME,parents:['appDataFolder']})
     const body = `--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${bnd}--`
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': `multipart/related; boundary=${bnd}` },
-      body
-    })
-    const d = await r.json()
-    if (d.id) driveFileId = d.id
-    lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+      method:'POST',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':`multipart/related; boundary=${bnd}`},body})
+    const d = await r.json(); if(d.id) driveFileId = d.id
   }
+  lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
 }
-async function syncFromDrive() {
-  try {
+async function syncFromDrive(){
+  try{
     driveFileId = await driveFind()
-    if (driveFileId) {
+    if(driveFileId){
       allEntries = await driveRead(driveFileId)
       await localSave(allEntries)
       lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
-    } else if (allEntries.length > 0) {
-      await driveWrite(allEntries) // first login: push local → Drive
+    } else if(allEntries.length>0){
+      await driveWrite(allEntries)
     }
-  } catch(e) { console.error('Drive sync error:', e) }
+  }catch(e){console.error('Drive sync:',e)}
 }
-async function saveAndSync(arr) {
+async function saveAndSync(arr){
   allEntries = arr
   await localSave(arr)
-  if (gToken) { try { await driveWrite(arr) } catch(e) { console.error('Drive write:', e) } }
-  // if auto-publish enabled, also publish visible files to My Drive
-  try{
-    if (gToken && localStorage.getItem('autoPublish')==='1') {
-      await publishEntriesToMyDrive(allEntries)
-    }
-  }catch(e){console.error('publish to MyDrive failed',e)}
+  if(gToken){ try{await driveWrite(arr)}catch(e){console.error('driveWrite:',e)} }
+  if(gToken && localStorage.getItem('autoPublish')==='1'){
+    try{await publishEntriesToMyDrive(allEntries)}catch(e){console.error('auto-publish:',e)}
+  }
   renderAll()
 }
 
-// ── Google Auth ───────────────────────────────────────────
-function initGoogleAuth() {
-  if (GOOGLE_CLIENT_ID === 'REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID') {
-    const btn = document.getElementById('authBtn')
-    btn.textContent = 'Sync Drive (voir README)'; btn.disabled = true; btn.style.opacity = '0.5'
-    document.getElementById('authStatus').textContent = '(local uniquement)'
-    return
-  }
-  if (typeof google === 'undefined' || !google.accounts) return
+// ── Google Auth ───────────────────────────────────────
+function initGoogleAuth(){
+  if(typeof google==='undefined'||!google.accounts) return
   window.tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID, scope: DRIVE_SCOPE,
-    callback: async resp => {
-      if (resp.error) { alert('Erreur auth Google: ' + resp.error); return }
+    client_id:GOOGLE_CLIENT_ID, scope:DRIVE_SCOPE,
+    callback: async resp=>{
+      if(resp.error){toast('Erreur auth: '+resp.error); return}
       gToken = resp.access_token
       updateAuthUI(true)
-      try{ localStorage.setItem('gsi_granted','1') }catch(e){}
-      await syncFromDrive()
-      renderAll()
+      try{localStorage.setItem('gsi_granted','1')}catch(e){}
+      await syncFromDrive(); renderAll()
     }
   })
-  // If the user previously granted access, try to silently obtain a fresh token
   try{
-    if (localStorage.getItem('gsi_granted')) {
-      // requestAccessToken without a user gesture may succeed silently if session valid
-      window.tokenClient.requestAccessToken();
-    }
-  }catch(e){console.warn('silent token request failed',e)}
+    if(localStorage.getItem('gsi_granted')) window.tokenClient.requestAccessToken()
+  }catch(e){console.warn('silent token:',e)}
 }
-document.getElementById('authBtn').addEventListener('click', () => {
-  if (gToken) {
-    google.accounts.oauth2.revoke(gToken, () => { gToken = null; try{localStorage.removeItem('gsi_granted')}catch(e){}; updateAuthUI(false) })
+document.getElementById('authBtn').addEventListener('click',()=>{
+  if(gToken){
+    google.accounts.oauth2.revoke(gToken,()=>{gToken=null;try{localStorage.removeItem('gsi_granted')}catch(e){}; updateAuthUI(false)})
   } else {
-    if (window.tokenClient) window.tokenClient.requestAccessToken()
-    else alert('SDK Google non chargé, attends 2s et réessaie')
+    if(window.tokenClient) window.tokenClient.requestAccessToken()
+    else toast('SDK Google non chargé, attends 2s')
   }
 })
-function updateAuthUI(loggedIn) {
-  document.getElementById('authBtn').textContent = loggedIn ? 'Déconnexion' : 'Connexion Google'
-  document.getElementById('authStatus').textContent = loggedIn ? '✓ Sync Drive' : ''
-  renderStorageBar()
+function updateAuthUI(loggedIn){
+  document.getElementById('authBtn').textContent = loggedIn ? '🔓 Déconnexion' : '�� Connexion Google'
+  document.getElementById('authBtn').className = loggedIn ? 'd-btn danger' : 'd-btn primary'
+  document.getElementById('authStatus').textContent = loggedIn ? '✓ Connecté' : 'Déconnecté'
+  document.getElementById('authDot').className = loggedIn ? 'ok' : ''
+  document.getElementById('authDot').title = loggedIn ? 'Connecté à Google Drive' : 'Déconnecté'
+  renderStorageBar(); updateDriveInfo()
 }
-
-// ── Map ───────────────────────────────────────────────────
-const map = L.map('map').setView([46, 2], 5)
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© OpenStreetMap contributors'
-}).addTo(map)
-const markerLayer = L.layerGroup().addTo(map)
-
-function renderMarkers() {
-  markerLayer.clearLayers()
-  allEntries.forEach(e => {
-    if (!e.location) return
-    const fp = (e.photos && e.photos[0]) || null
-    const popup = `<div style="max-width:260px">
-      <strong>${new Date(e.createdAt).toLocaleString()}</strong>
-      <div>${e.boxType} · ${e.holeDiameter_mm}mm · ${e.paperType||''}</div>
-      ${e.retrievalDate?`<div style="color:green">✓ Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}
-      ${e.notes?`<div style="margin-top:4px;font-style:italic">${e.notes}</div>`:''}
-      ${fp?`<img src="${fp}" style="max-width:250px;border-radius:6px;margin-top:8px;display:block"/>`:''}
-      ${e.finalPhotoDataURL?`<div style="margin-top:6px"><em>Finale:</em><img src="${e.finalPhotoDataURL}" style="max-width:250px;border-radius:6px;margin-top:4px;display:block"/></div>`:''}
-    </div>`
-    L.marker([e.location.lat, e.location.lng]).bindPopup(popup).addTo(markerLayer)
-  })
-  setTimeout(() => map.invalidateSize(), 100)
-}
-
-// ── List ──────────────────────────────────────────────────
-function renderList() {
-  const container = document.getElementById('list')
-  container.innerHTML = ''
-  if (!allEntries.length) { container.innerHTML = '<div class="empty">Aucun sténopé enregistré</div>'; return }
-  allEntries.slice().reverse().forEach(e => {
-    const thumb = (e.photos && e.photos[0]) || null
-    const card = document.createElement('div')
-    card.className = 'entry-card' + (e.retrievalDate ? ' retrieved' : '')
-    card.innerHTML = `
-      <div class="entry-head">
-        ${thumb?`<div class="entry-thumb"><img src="${thumb}"/></div>`:''}
-        <div class="entry-info">
-          <div class="entry-date">${new Date(e.createdAt).toLocaleString()}</div>
-          <div class="entry-meta">${e.boxType} · ${e.holeDiameter_mm}mm · ${e.paperType||''}</div>
-          <div class="entry-meta">${e.location?`📍 ${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)} ±${Math.round(e.location.accuracy)}m`:'📍 Pas de géoloc'}</div>
-          ${e.notes?`<div class="entry-notes">${e.notes}</div>`:''}
-          ${e.retrievalDate?`<div class="retrieved-badge">✓ Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}
-        </div>
-      </div>
-      <div class="entry-actions"></div>`
-    const act = card.querySelector('.entry-actions')
-    const mk = (label, fn, danger) => { const b=document.createElement('button'); b.className='btn-xs'+(danger?' danger':''); b.textContent=label; b.onclick=fn; return b }
-    act.appendChild(mk('🗺 Voir', () => { switchTab('panelMap'); if(e.location) setTimeout(()=>map.setView([e.location.lat,e.location.lng],15),300) }))
-    act.appendChild(mk(e.retrievalDate?'↩ Annuler':'✓ Récupéré', async()=>{ const i=allEntries.findIndex(x=>x.id===e.id); if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now(); await saveAndSync(allEntries)} }))
-    act.appendChild(mk('📷 Photo finale', ()=>openFinalUpload(e.id)))
-    act.appendChild(mk('🗑', async()=>{ if(!confirm('Supprimer ce sténopé ?'))return; await saveAndSync(allEntries.filter(x=>x.id!==e.id)) }, true))
-    container.appendChild(card)
-  })
-}
-function renderStorageBar() {
-  const sz = new Blob([JSON.stringify(allEntries)]).size
-  document.getElementById('storageBar').textContent =
-    `~${(sz/1024).toFixed(1)} KB${gToken?' · ✓ sync Google Drive':' · local uniquement'}`
-}
-function renderAll() { renderList(); renderMarkers(); renderStorageBar() }
-
 function updateDriveInfo(){
-  const el = document.getElementById('driveInfo')
-  if(!el) return
-  if(!gToken){ el.textContent = ''; return }
-  try{
-    const v = localStorage.getItem('lastDriveSync')
-    if(v){ el.textContent = `Drive: ${(allEntries||[]).length} entrées · dernière sync ${new Date(Number(v)).toLocaleString()}` }
-    else el.textContent = `Drive: ${(allEntries||[]).length} entrées` 
-  }catch(e){ el.textContent = `Drive: ${(allEntries||[]).length} entrées` }
+  const el = document.getElementById('driveInfo'); if(!el) return
+  if(!gToken){el.textContent='—'; return}
+  const v = localStorage.getItem('lastDriveSync')
+  el.textContent = v ? `${allEntries.length} entrées · ${new Date(Number(v)).toLocaleTimeString()}` : `${allEntries.length} entrées`
 }
 
-async function checkDriveStatus(){
-  if(!gToken){ alert('Connecte-toi d\u2019abord à Google pour vérifier Drive.'); return }
-  try{
-    const fid = await driveFind()
-    if(!fid){ alert('Aucun fichier de synchronisation trouvé dans appDataFolder.') ; return }
-    const data = await driveRead(fid)
-    alert(`Drive: trouvé ${Array.isArray(data)?data.length:0} entrées. Dernière sync locale: ${localStorage.getItem('lastDriveSync')?new Date(Number(localStorage.getItem('lastDriveSync'))).toLocaleString():'n/a'}`)
-  }catch(e){ alert('Erreur en accédant à Drive: '+(e.message||e)) }
-}
-
-document.getElementById('checkDriveBtn').addEventListener('click',checkDriveStatus)
-
-// ── Publish visible copies to My Drive (optional) ───────────────────
+// ── Drive My Drive (visible publish) ─────────────────
 async function driveFindFolder(name){
   const q = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents`)
   const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
-  const d = await r.json()
-  return d.files && d.files[0] ? d.files[0].id : null
+  const d = await r.json(); return d.files&&d.files[0]?d.files[0].id:null
 }
 async function driveCreateFolder(name){
-  const meta = { name, mimeType: 'application/vnd.google-apps.folder', parents: ['root'] }
-  const r = await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},body:JSON.stringify(meta)})
+  const r = await fetch('https://www.googleapis.com/drive/v3/files',{
+    method:'POST',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:['root']})})
   return (await r.json()).id
 }
-async function uploadDataURLToFolder(dataURL, filename, folderId){
-  const binStr = atob(dataURL.split(',')[1])
-  const len = binStr.length
-  const u8 = new Uint8Array(len)
-  for(let i=0;i<len;i++) u8[i]=binStr.charCodeAt(i)
-  const blob = new Blob([u8],{type:'image/jpeg'})
-  const bnd = 'up_'+Date.now()
-  const meta = JSON.stringify({ name: filename, parents: [folderId] })
-  const body = `--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${bnd}\r\nContent-Type: image/jpeg\r\n\r\n` + await blob.arrayBuffer() + `\r\n--${bnd}--`
-  // use fetch with blob body: build multipart using FormData is easier
-  const fd = new FormData();
-  fd.append('metadata', new Blob([meta],{type:'application/json'}));
-  fd.append('file', blob, filename)
-  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
-  const j = await r.json()
-  if (j && j.id) {
-    const meta = await getFileMeta(j.id)
-    return Object.assign({}, j, meta)
-  }
-  return j
+async function getFileMeta(id){
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,name,webViewLink`,{headers:{Authorization:`Bearer ${gToken}`}})
+  return r.json()
 }
-async function driveFindFileInFolder(folderId, filename){
+async function driveFindFileInFolder(folderId,filename){
   const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents`)
   const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
-  const d = await r.json()
-  return d.files && d.files[0] ? d.files[0].id : null
+  const d = await r.json(); return d.files&&d.files[0]?d.files[0].id:null
 }
-async function getFileMeta(fileId){
-  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,webViewLink`,{headers:{Authorization:`Bearer ${gToken}`}})
-  return await r.json()
+async function uploadDataURLToFolder(dataURL,filename,folderId){
+  const binStr = atob(dataURL.split(',')[1])
+  const u8 = new Uint8Array(binStr.length)
+  for(let i=0;i<binStr.length;i++) u8[i]=binStr.charCodeAt(i)
+  const blob = new Blob([u8],{type:'image/jpeg'})
+  const meta = JSON.stringify({name:filename,parents:[folderId]})
+  const fd = new FormData()
+  fd.append('metadata',new Blob([meta],{type:'application/json'}))
+  fd.append('file',blob,filename)
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+    method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
+  const j = await r.json()
+  if(j&&j.id){ const m=await getFileMeta(j.id); return Object.assign({},j,m) }
+  return j
 }
-async function uploadJSONToFolder(obj, filename, folderId){
+async function uploadJSONToFolder(obj,filename,folderId){
   const content = JSON.stringify(obj)
-  const fd = new FormData();
-  fd.append('metadata', new Blob([JSON.stringify({name:filename, parents:[folderId]})],{type:'application/json'}));
-  fd.append('file', new Blob([content],{type:'application/json'}), filename)
-  // try to find existing file and PATCH it instead of creating another
   const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents`)
   const r0 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
   const d0 = await r0.json()
-  if(d0.files && d0.files[0]){
-    const id = d0.files[0].id
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,{method:'PATCH',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},body:content})
+  if(d0.files&&d0.files[0]){
+    const id=d0.files[0].id
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,{
+      method:'PATCH',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},body:content})
     return {id}
-  } else {
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
-    return await r.json()
   }
+  const fd = new FormData()
+  fd.append('metadata',new Blob([JSON.stringify({name:filename,parents:[folderId]})],{type:'application/json'}))
+  fd.append('file',new Blob([content],{type:'application/json'}),filename)
+  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+    method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
+  return r.json()
 }
 
+// ── Parallel publish ──────────────────────────────────
 async function publishEntriesToMyDrive(entries){
   if(!gToken) throw new Error('Not authenticated')
   const folderName = 'Solargraph_Tracker'
   let folderId = await driveFindFolder(folderName)
   if(!folderId) folderId = await driveCreateFolder(folderName)
-  // upload photos and collect fileIds (avoid duplicates)
-  function sanitize(s){ return (s||'').toString().replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_\-.]/g,'') }
-  let total = 0; for(const e of entries) total += (e.photos||[]).length + (e.finalPhotoDataURL?1:0)
-  let done = 0
-  const setProgress = (txt)=>{ try{document.getElementById('publishStatus').textContent = txt}catch(e){}; try{const p=document.getElementById('publishProgress'); if(p && total>0) p.value = Math.round((done/total)*100)}catch(e){} }
+
+  // Build flat list of upload tasks
+  const tasks = []
   for(const e of entries){
-    e.myDrivePhotos = e.myDrivePhotos || []
+    e.myDrivePhotos = e.myDrivePhotos||[]
     for(let i=0;i<(e.photos||[]).length;i++){
-      const url = e.photos[i]
-      const d = new Date(e.createdAt||Date.now())
-      const fname = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_${sanitize(e.boxType)}_${sanitize(e.paperType)}_${sanitize(e.holeDiameter_mm)}_${i}.jpg`
-      // reuse existing recorded fileId if present
-      let reused = null
-      if(e.myDrivePhotos[i] && e.myDrivePhotos[i].fileId){
-        reused = e.myDrivePhotos[i]
-      } else {
-        // check whether file exists in folder (previous publish)
-        const existingId = await driveFindFileInFolder(folderId, fname)
-        if(existingId){
-          const meta = await getFileMeta(existingId)
-          reused = { fileId: meta.id, name: meta.name, webViewLink: meta.webViewLink }
-        } else {
-          const res = await uploadDataURLToFolder(url,fname,folderId)
-          if(res && res.id) reused = { fileId: res.id, name: res.name, webViewLink: res.webViewLink }
-        }
-      }
-      if(reused) e.myDrivePhotos[i]=reused
-      done++
-      setProgress(`Publier photos ${done}/${total}`)
+      if(e.myDrivePhotos[i]&&e.myDrivePhotos[i].fileId) continue // already uploaded
+      tasks.push({e, i, url:e.photos[i], fname:entryFilename(e,i,false), isFinal:false})
     }
-    if(e.finalPhotoDataURL){
-      const d2 = new Date(e.createdAt||Date.now())
-      const fname = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}_${sanitize(e.boxType)}_${sanitize(e.paperType)}_${sanitize(e.holeDiameter_mm)}_final.jpg`
-      if(!(e.myDriveFinal && e.myDriveFinal.fileId)){
-        const existingId = await driveFindFileInFolder(folderId, fname)
-        if(existingId){
-          const meta = await getFileMeta(existingId)
-          e.myDriveFinal = { fileId: meta.id, name: meta.name, webViewLink: meta.webViewLink }
-        } else {
-          const resf = await uploadDataURLToFolder(e.finalPhotoDataURL,fname,folderId)
-          if(resf && resf.id) e.myDriveFinal = { fileId: resf.id, name: resf.name, webViewLink: resf.webViewLink }
-        }
-      }
-      done++
-      setProgress(`Publier photos ${done}/${total}`)
+    if(e.finalPhotoDataURL&&!(e.myDriveFinal&&e.myDriveFinal.fileId)){
+      tasks.push({e, i:-1, url:e.finalPhotoDataURL, fname:entryFilename(e,-1,true), isFinal:true})
     }
   }
-  // upload metadata file
-  const metaRes = await uploadJSONToFolder(entries, 'solargraph_entries.json', folderId)
-  setProgress('Publier terminé')
-  try{ await localSave(entries); if(gToken) await driveWrite(entries) }catch(e){}
-  try{ setTimeout(()=>{ document.getElementById('publishStatus').textContent=''},2000) }catch(e){}
-  return {folderId, metaRes}
+
+  const total = tasks.length
+  let done = 0
+  const progEl = document.getElementById('pubProgress')
+  const statusEl = document.getElementById('pubStatus')
+  if(progEl){ progEl.style.display='block'; progEl.value=0 }
+  const upd = ()=>{
+    done++
+    if(progEl&&total>0) progEl.value = Math.round((done/total)*100)
+    if(statusEl) statusEl.textContent = `${done}/${total} photos`
+  }
+
+  // Pool: run UPLOAD_CONCURRENCY tasks at a time
+  async function runTask(t){
+    const existingId = await driveFindFileInFolder(folderId, t.fname)
+    let result
+    if(existingId){
+      const m = await getFileMeta(existingId)
+      result = { fileId:m.id, name:m.name, webViewLink:m.webViewLink }
+    } else {
+      const res = await uploadDataURLToFolder(t.url, t.fname, folderId)
+      if(res&&res.id) result = { fileId:res.id, name:res.name, webViewLink:res.webViewLink }
+    }
+    if(result){
+      if(t.isFinal) t.e.myDriveFinal = result
+      else t.e.myDrivePhotos[t.i] = result
+    }
+    upd()
+  }
+
+  // Chunked parallel execution
+  for(let i=0;i<tasks.length;i+=UPLOAD_CONCURRENCY){
+    await Promise.all(tasks.slice(i,i+UPLOAD_CONCURRENCY).map(runTask))
+  }
+
+  if(total===0 && statusEl) statusEl.textContent = 'Aucune nouvelle photo à publier'
+
+  await uploadJSONToFolder(entries,'solargraph_entries.json',folderId)
+  if(statusEl) statusEl.textContent = total>0 ? `✓ ${total} photos publiées` : '✓ Métadonnées mises à jour'
+  if(progEl) progEl.value = 100
+
+  try{await localSave(entries); if(gToken) await driveWrite(entries)}catch(e){}
+  lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
+  updateDriveInfo()
+
+  setTimeout(()=>{
+    if(progEl){progEl.style.display='none'; progEl.value=0}
+    if(statusEl) statusEl.textContent=''
+  },3000)
+
+  return {folderId, total}
 }
 
-document.getElementById('publishBtn').addEventListener('click', async ()=>{
-  if(!gToken){ alert('Connecte-toi d\u2019abord à Google.'); return }
-  if(!confirm('Publier une copie visible de toutes les entrées sur Mon Drive (dossier Solargraph_Tracker) ?')) return
+document.getElementById('publishBtn').addEventListener('click',async()=>{
+  if(!gToken){toast('Connecte-toi d\u2019abord à Google.'); return}
+  document.getElementById('pubStatus').textContent = 'Démarrage…'
+  document.getElementById('pubProgress').style.display='block'
   try{
-    const res = await publishEntriesToMyDrive(allEntries)
-    alert('Publier terminé')
-    lastDriveSync = Date.now(); localStorage.setItem('lastDriveSync',String(lastDriveSync)); updateDriveInfo();
-  }catch(e){alert('Erreur de publication: '+(e.message||e)); console.error(e)}
+    const r = await publishEntriesToMyDrive(allEntries)
+    toast(`✓ Publié : ${r.total} photo(s) sur Mon Drive`)
+  }catch(e){toast('Erreur: '+(e.message||e)); console.error(e)}
 })
-
-// auto-publish toggle wiring
-const autoToggle = document.getElementById('autoPublishToggle')
-try{ autoToggle.checked = localStorage.getItem('autoPublish')==='1' }catch(e){}
-autoToggle.addEventListener('change',()=>{ try{ localStorage.setItem('autoPublish', autoToggle.checked?'1':'0') }catch(e){} })
-
-// reset local myDrive links after user cleaned Drive folder
-document.getElementById('resetDriveLinks').addEventListener('click', async ()=>{
-  if(!confirm('Réinitialiser les liens Drive locaux ? Cela forcera un nouvel upload complet lors de la prochaine publication.')) return
-  for(const e of allEntries){ delete e.myDrivePhotos; delete e.myDriveFinal }
+document.getElementById('checkDriveBtn').addEventListener('click',async()=>{
+  if(!gToken){toast('Connecte-toi d\u2019abord.'); return}
+  try{
+    const fid=await driveFind()
+    if(!fid){toast('Aucun fichier dans appDataFolder'); return}
+    const data=await driveRead(fid)
+    const v=localStorage.getItem('lastDriveSync')
+    toast(`Drive: ${Array.isArray(data)?data.length:0} entrées · ${v?new Date(Number(v)).toLocaleString():'n/a'}`, 4000)
+  }catch(e){toast('Erreur Drive: '+(e.message||e))}
+})
+document.getElementById('resetDriveLinks').addEventListener('click',async()=>{
+  if(!confirm('Réinitialiser les liens Drive ? Le prochain publish re-uploadera tout.')) return
+  for(const e of allEntries){delete e.myDrivePhotos; delete e.myDriveFinal}
   await saveAndSync(allEntries)
-  alert('Liens Drive locaux réinitialisés.')
+  toast('Liens réinitialisés ✓')
 })
 
+// auto-publish toggle
+const autoToggle = document.getElementById('autoPublishToggle')
+try{autoToggle.checked = localStorage.getItem('autoPublish')==='1'}catch(e){}
+autoToggle.addEventListener('change',()=>{
+  try{localStorage.setItem('autoPublish',autoToggle.checked?'1':'0')}catch(e){}
+  toast(autoToggle.checked?'Auto-publish activé':'Auto-publish désactivé')
+})
 
-// ── Photos ────────────────────────────────────────────────
-document.getElementById('addPhotoBtn').addEventListener('click', ()=>document.getElementById('photoInput').click())
-document.getElementById('photoInput').addEventListener('change', async ev => {
-  for (const f of Array.from(ev.target.files||[])) {
-    try { pendingPhotos.push(await compressFile(f,1200,0.75)) } catch(e){console.error(e)}
+// ── Drawer ────────────────────────────────────────────
+const drawer=document.getElementById('drawer')
+const overlay=document.getElementById('drawerOverlay')
+function openDrawer(){drawer.classList.add('open');overlay.classList.add('open')}
+function closeDrawer(){drawer.classList.remove('open');overlay.classList.remove('open')}
+document.getElementById('gearBtn').addEventListener('click',openDrawer)
+document.getElementById('drawerClose').addEventListener('click',closeDrawer)
+overlay.addEventListener('click',closeDrawer)
+
+// ── Map ───────────────────────────────────────────────
+const map = L.map('map').setView([46,2],5)
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map)
+const markerLayer = L.layerGroup().addTo(map)
+
+function renderMarkers(){
+  markerLayer.clearLayers()
+  allEntries.forEach(e=>{
+    if(!e.location) return
+    const fp = (e.photos&&e.photos[0])||null
+    L.marker([e.location.lat,e.location.lng]).bindPopup(
+      `<div style="max-width:260px">
+        <strong>${new Date(e.createdAt).toLocaleString()}</strong>
+        <div>${e.boxType} · ${e.holeDiameter_mm}mm · ${e.paperType||''}</div>
+        ${e.retrievalDate?`<div style="color:green">✓ Récupéré ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}
+        ${e.notes?`<div style="font-style:italic;margin-top:4px">${e.notes}</div>`:''}
+        ${fp?`<img src="${fp}" style="max-width:250px;border-radius:8px;margin-top:8px;display:block">`:''}
+        ${e.finalPhotoDataURL?`<div style="margin-top:6px"><em>Finale:</em><img src="${e.finalPhotoDataURL}" style="max-width:250px;border-radius:8px;margin-top:4px;display:block"></div>`:''}
+      </div>`
+    ).addTo(markerLayer)
+  })
+  setTimeout(()=>map.invalidateSize(),100)
+}
+
+// ── List ──────────────────────────────────────────────
+function renderList(){
+  const c=document.getElementById('list'); c.innerHTML=''
+  if(!allEntries.length){c.innerHTML='<div class="empty">Aucun sténopé enregistré</div>'; return}
+  allEntries.slice().reverse().forEach(e=>{
+    const thumb=(e.photos&&e.photos[0])||null
+    const card=document.createElement('div')
+    card.className='entry-card'+(e.retrievalDate?' retrieved':'')
+    card.innerHTML=`
+      <div class="entry-head">
+        ${thumb?`<div class="entry-thumb"><img src="${thumb}" loading="lazy"/></div>`:''}
+        <div class="entry-info">
+          <div class="entry-date">${new Date(e.createdAt).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}</div>
+          <span class="entry-chip">${e.boxType}</span>
+          <span class="entry-chip">${e.holeDiameter_mm}mm</span>
+          <span class="entry-chip${e.retrievalDate?' green':''}">${e.paperType||''}</span>
+          <div class="entry-meta">${e.location?`📍 ${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)} ±${Math.round(e.location.accuracy)}m`:'📍 Pas de géoloc'}</div>
+          ${e.notes?`<div class="entry-notes">${e.notes}</div>`:''}
+          ${e.retrievalDate?`<div class="retrieved-badge">✓ Récupéré le ${new Date(e.retrievalDate).toLocaleDateString('fr-FR')}</div>`:''}
+        </div>
+      </div>
+      <div class="entry-actions"></div>`
+    const act=card.querySelector('.entry-actions')
+    const mk=(label,fn,danger)=>{const b=document.createElement('button');b.className='btn-xs'+(danger?' danger':'');b.textContent=label;b.onclick=fn;return b}
+    act.appendChild(mk('🗺 Voir',()=>{switchTab('panelMap');if(e.location)setTimeout(()=>map.setView([e.location.lat,e.location.lng],15),300)}))
+    act.appendChild(mk(e.retrievalDate?'↩ Annuler récup':'✓ Récupéré',async()=>{const i=allEntries.findIndex(x=>x.id===e.id);if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now();await saveAndSync(allEntries)}}))
+    act.appendChild(mk('📷 Photo finale',()=>openFinalUpload(e.id)))
+    if(e.myDrivePhotos&&e.myDrivePhotos[0]&&e.myDrivePhotos[0].webViewLink)
+      act.appendChild(mk('🔗 Drive',()=>window.open(e.myDrivePhotos[0].webViewLink,'_blank')))
+    act.appendChild(mk('🗑',async()=>{if(!confirm('Supprimer ce sténopé ?'))return;await saveAndSync(allEntries.filter(x=>x.id!==e.id))},true))
+    c.appendChild(card)
+  })
+}
+function renderStorageBar(){
+  const sz=new Blob([JSON.stringify(allEntries)]).size
+  document.getElementById('storageBar').textContent=`~${(sz/1024).toFixed(1)} KB · ${allEntries.length} entrées${gToken?' · ✓ Drive':''}`
+}
+function renderAll(){renderList();renderMarkers();renderStorageBar();updateDriveInfo()}
+
+// ── Photos ────────────────────────────────────────────
+document.getElementById('addPhotoBtn').addEventListener('click',()=>document.getElementById('photoInput').click())
+document.getElementById('photoInput').addEventListener('change',async ev=>{
+  for(const f of Array.from(ev.target.files||[])){
+    try{pendingPhotos.push(await compressFile(f,1200,0.75))}catch(e){console.error(e)}
   }
   ev.target.value=''; renderPreviews()
 })
-function renderPreviews() {
+function renderPreviews(){
   const p=document.getElementById('photosPreview'); p.innerHTML=''
   pendingPhotos.forEach((d,i)=>{
     const h=document.createElement('div'); h.className='photo-thumb'
@@ -492,30 +686,40 @@ function renderPreviews() {
 function compressFile(file,maxWidth=1200,quality=0.75){
   return new Promise((resolve,reject)=>{
     const img=new Image(),fr=new FileReader()
-    fr.onload=()=>{img.onload=()=>{let w=img.width,h=img.height;if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth};const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);resolve(c.toDataURL('image/jpeg',quality))};img.onerror=reject;img.src=fr.result};fr.onerror=reject;fr.readAsDataURL(file)
+    fr.onload=()=>{img.onload=()=>{
+      let w=img.width,h=img.height
+      if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth}
+      const c=document.createElement('canvas');c.width=w;c.height=h
+      c.getContext('2d').drawImage(img,0,0,w,h)
+      resolve(c.toDataURL('image/jpeg',quality))
+    };img.onerror=reject;img.src=fr.result};fr.onerror=reject;fr.readAsDataURL(file)
   })
 }
 async function openFinalUpload(id){
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*'
-  inp.onchange=async ev=>{const f=ev.target.files&&ev.target.files[0];if(!f)return;const d=await compressFile(f,1200,0.75);const i=allEntries.findIndex(x=>x.id===id);if(i!==-1){allEntries[i].finalPhotoDataURL=d;await saveAndSync(allEntries);alert('Photo finale enregistrée')}}
-  inp.click()
+  inp.onchange=async ev=>{
+    const f=ev.target.files&&ev.target.files[0]; if(!f) return
+    const d=await compressFile(f,1200,0.75)
+    const i=allEntries.findIndex(x=>x.id===id)
+    if(i!==-1){allEntries[i].finalPhotoDataURL=d;await saveAndSync(allEntries);toast('Photo finale enregistrée ✓')}
+  }; inp.click()
 }
 
-// ── Geoloc ────────────────────────────────────────────────
+// ── Geoloc ────────────────────────────────────────────
 function startGeoloc(){
   const el=document.getElementById('geoStatus')
   if(!navigator.geolocation){el.textContent='📍 Géoloc non supportée';el.className='err';return}
-  el.textContent='📍 Localisation en cours…';el.className=''
+  el.textContent='📍 Localisation…';el.className=''
   navigator.geolocation.getCurrentPosition(
     p=>{currentLoc={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy};el.textContent=`📍 ${currentLoc.lat.toFixed(5)}, ${currentLoc.lng.toFixed(5)} (±${Math.round(currentLoc.accuracy)}m)`;el.className='ok'},
-    err=>{el.textContent=`📍 Erreur: ${err.message}`;el.className='err'},
+    err=>{el.textContent=`📍 ${err.message}`;el.className='err'},
     {enableHighAccuracy:true,timeout:15000}
   )
 }
 
-// ── Save ──────────────────────────────────────────────────
-document.getElementById('saveBtn').addEventListener('click', async()=>{
-  if(pendingPhotos.length===0){alert("Ajoute au moins une photo avant d'enregistrer");return}
+// ── Save ──────────────────────────────────────────────
+document.getElementById('saveBtn').addEventListener('click',async()=>{
+  if(!pendingPhotos.length){toast("Ajoute au moins une photo !"); return}
   const id=Date.now().toString(36)+Math.random().toString(36).slice(2,8)
   const entry={id,createdAt:Date.now(),photos:pendingPhotos.slice(),location:currentLoc,
     boxType:document.getElementById('boxType').value,
@@ -526,10 +730,10 @@ document.getElementById('saveBtn').addEventListener('click', async()=>{
   allEntries.push(entry)
   await saveAndSync(allEntries)
   pendingPhotos=[];renderPreviews();document.getElementById('notes').value=''
-  alert('Sténopé enregistré !');startGeoloc()
+  toast('Sténopé enregistré ✓'); startGeoloc()
 })
 
-// ── Export ────────────────────────────────────────────────
+// ── Export ────────────────────────────────────────────
 document.getElementById('exportJson').addEventListener('click',()=>{
   const b=new Blob([JSON.stringify(allEntries,null,2)],{type:'application/json'})
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='solar_entries.json';a.click()
@@ -537,7 +741,9 @@ document.getElementById('exportJson').addEventListener('click',()=>{
 document.getElementById('exportKml').addEventListener('click',()=>{
   const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   const parts=['<?xml version="1.0" encoding="UTF-8"?>','<kml xmlns="http://www.opengis.net/kml/2.2"><Document>']
-  allEntries.filter(e=>e.location).forEach(e=>{parts.push(`<Placemark><name>${esc('Sténopé '+new Date(e.createdAt).toLocaleDateString())}</name><description>${esc(e.boxType+' · '+e.holeDiameter_mm+'mm · '+(e.paperType||'')+'\n'+(e.notes||''))}</description><Point><coordinates>${e.location.lng},${e.location.lat},0</coordinates></Point></Placemark>`)})
+  allEntries.filter(e=>e.location).forEach(e=>{
+    parts.push(`<Placemark><name>${esc(new Date(e.createdAt).toLocaleDateString())}</name><description>${esc(e.boxType+' · '+e.holeDiameter_mm+'mm · '+(e.paperType||'')+'\n'+(e.notes||''))}</description><Point><coordinates>${e.location.lng},${e.location.lat},0</coordinates></Point></Placemark>`)
+  })
   parts.push('</Document></kml>')
   const b=new Blob([parts.join('\n')],{type:'application/vnd.google-earth.kml+xml'})
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='solar_entries.kml';a.click()
@@ -546,7 +752,7 @@ document.getElementById('clearAll').addEventListener('click',async()=>{
   if(!confirm('Supprimer TOUS les sténopés ?'))return; await saveAndSync([])
 })
 
-// ── Tabs ──────────────────────────────────────────────────
+// ── Tabs ──────────────────────────────────────────────
 function switchTab(tabId){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId))
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===tabId))
@@ -554,7 +760,7 @@ function switchTab(tabId){
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)))
 
-// ── Init ──────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────
 ;(async()=>{
   allEntries=await localLoad()
   renderAll(); startGeoloc()
