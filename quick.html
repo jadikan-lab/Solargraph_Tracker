@@ -66,6 +66,9 @@
   <button id="checkDriveBtn" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Vérifier Drive</button>
   <button id="publishBtn" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Publier sur Mon Drive</button>
   <label style="margin-left:8px;font-size:0.85rem;color:#cfe8ff"><input type="checkbox" id="autoPublishToggle" style="margin-right:6px"/>Auto-publish</label>
+  <span id="publishStatus" style="margin-left:8px;font-size:0.85rem;color:#cfe8ff"></span>
+  <progress id="publishProgress" value="0" max="100" style="width:160px;margin-left:8px;vertical-align:middle"></progress>
+  <button id="resetDriveLinks" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Réinitialiser liens Drive</button>
 </div>
 
 <div id="tabs">
@@ -390,14 +393,16 @@ async function publishEntriesToMyDrive(entries){
   let folderId = await driveFindFolder(folderName)
   if(!folderId) folderId = await driveCreateFolder(folderName)
   // upload photos and collect fileIds (avoid duplicates)
+  function sanitize(s){ return (s||'').toString().replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_\-.]/g,'') }
   let total = 0; for(const e of entries) total += (e.photos||[]).length + (e.finalPhotoDataURL?1:0)
   let done = 0
-  const setProgress = txt=>{ try{document.getElementById('publishStatus').textContent = txt}catch(e){} }
+  const setProgress = (txt)=>{ try{document.getElementById('publishStatus').textContent = txt}catch(e){}; try{const p=document.getElementById('publishProgress'); if(p && total>0) p.value = Math.round((done/total)*100)}catch(e){} }
   for(const e of entries){
     e.myDrivePhotos = e.myDrivePhotos || []
     for(let i=0;i<(e.photos||[]).length;i++){
       const url = e.photos[i]
-      const fname = `${e.id}_${i}.jpg`
+      const d = new Date(e.createdAt||Date.now())
+      const fname = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_${sanitize(e.boxType)}_${sanitize(e.paperType)}_${sanitize(e.holeDiameter_mm)}_${i}.jpg`
       // reuse existing recorded fileId if present
       let reused = null
       if(e.myDrivePhotos[i] && e.myDrivePhotos[i].fileId){
@@ -418,7 +423,8 @@ async function publishEntriesToMyDrive(entries){
       setProgress(`Publier photos ${done}/${total}`)
     }
     if(e.finalPhotoDataURL){
-      const fname = `${e.id}_final.jpg`
+      const d2 = new Date(e.createdAt||Date.now())
+      const fname = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}-${String(d2.getDate()).padStart(2,'0')}_${sanitize(e.boxType)}_${sanitize(e.paperType)}_${sanitize(e.holeDiameter_mm)}_final.jpg`
       if(!(e.myDriveFinal && e.myDriveFinal.fileId)){
         const existingId = await driveFindFileInFolder(folderId, fname)
         if(existingId){
@@ -455,6 +461,14 @@ document.getElementById('publishBtn').addEventListener('click', async ()=>{
 const autoToggle = document.getElementById('autoPublishToggle')
 try{ autoToggle.checked = localStorage.getItem('autoPublish')==='1' }catch(e){}
 autoToggle.addEventListener('change',()=>{ try{ localStorage.setItem('autoPublish', autoToggle.checked?'1':'0') }catch(e){} })
+
+// reset local myDrive links after user cleaned Drive folder
+document.getElementById('resetDriveLinks').addEventListener('click', async ()=>{
+  if(!confirm('Réinitialiser les liens Drive locaux ? Cela forcera un nouvel upload complet lors de la prochaine publication.')) return
+  for(const e of allEntries){ delete e.myDrivePhotos; delete e.myDriveFinal }
+  await saveAndSync(allEntries)
+  alert('Liens Drive locaux réinitialisés.')
+})
 
 
 // ── Photos ────────────────────────────────────────────────
