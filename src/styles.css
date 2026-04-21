@@ -1,0 +1,21 @@
+:root{
+  --accent:#0366d6;
+  --muted:#666;
+}
+*{box-sizing:border-box}
+body,html,#root{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+.app header{background:var(--accent);color:#fff;padding:12px}
+main{display:flex;height:calc(100% - 64px)}
+.sidebar{width:360px;padding:12px;background:#f8f8f8;overflow:auto}
+.map-wrap{flex:1}
+.add-form label{display:block;margin-bottom:8px}
+.add-form input[type=file]{display:block}
+.preview{max-width:100%;height:auto;border-radius:6px;margin:6px 0}
+.list ul{list-style:none;padding:0}
+.list li{padding:8px;border-bottom:1px solid #e6e6e6}
+.list li.retrieved{opacity:0.6}
+.item-head{display:flex;justify-content:space-between}
+.item-actions{margin-top:6px}
+.item-actions button{margin-right:8px}
+.loc-row{display:flex;align-items:center;gap:8px}
+.popup img{border-radius:4px}

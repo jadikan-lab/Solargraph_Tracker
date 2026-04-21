@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Solargraph Quick</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body{font-family:system-ui, -apple-system, Roboto, Arial;margin:0;height:100vh;display:flex}
+    #sidebar{width:360px;padding:12px;background:#f7f7f7;overflow:auto}
+    #map{flex:1}
+    .preview{max-width:100%;border-radius:6px;margin:6px 0}
+    label{display:block;margin:8px 0}
+    button{margin-right:6px}
+    li{margin:8px 0;padding:6px;border:1px solid #eee}
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>Ajouter sténopé (rapide)</h2>
+    <form id="form">
+      <label>Photo initiale<br><input id="photo" type="file" accept="image/*" capture="environment"></label>
+      <img id="preview" class="preview" src="" hidden>
+      <label>Type de boîte<br>
+        <select id="boxType"><option>full</option><option>medium</option><option>small</option></select>
+      </label>
+      <label>Diamètre (mm)<br>
+        <select id="hole"><option>0.26</option><option>0.4</option><option>0.5</option></select>
+      </label>
+      <label>Notes<br><textarea id="notes" rows="2" style="width:100%"></textarea></label>
+      <div style="margin:6px 0">
+        <button id="getLoc" type="button">Capturer géoloc</button>
+        <span id="locInfo">Aucune</span>
+      </div>
+      <div>
+        <button id="save">Enregistrer local</button>
+      </div>
+    </form>
+
+    <h3>Mes sténopés</h3>
+    <ul id="list"></ul>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Enhanced single-file prototype.
+    const KEY = 'solar_entries_v1'
+    function loadEntries(){ try { return JSON.parse(localStorage.getItem(KEY)||'[]') } catch(e){return []} }
+    function saveEntries(arr){ localStorage.setItem(KEY, JSON.stringify(arr)) }
+
+    // helper: approximate storage bytes used (JSON length)
+    function storageUsage(){ const s = localStorage.getItem(KEY) || ''; return new Blob([s]).size }
+
+    // Image compression/resizing via canvas (returns dataURL)
+    function compressFileToDataURL(file, maxWidth=1200, quality=0.7){
+      return new Promise((resolve, reject)=>{
+        const img = new Image();
+        const fr = new FileReader();
+        fr.onload = ()=>{
+          img.onload = ()=>{
+            let w = img.width, h = img.height
+            if (w > maxWidth){ h = Math.round(h * (maxWidth / w)); w = maxWidth }
+            const c = document.createElement('canvas'); c.width = w; c.height = h
+            const ctx = c.getContext('2d'); ctx.drawImage(img,0,0,w,h)
+            try{ const dataUrl = c.toDataURL('image/jpeg', quality); resolve(dataUrl) }catch(err){ reject(err) }
+          }
+          img.onerror = (e)=> reject(e)
+          img.src = fr.result
+        }
+        fr.onerror = (e)=> reject(e)
+        fr.readAsDataURL(file)
+      })
+    }
+
+    // Map
+    const map = L.map('map').setView([46, 2], 5)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map)
+    const markerLayer = L.layerGroup().addTo(map)
+
+    function renderMarkers(){ markerLayer.clearLayers(); const entries = loadEntries(); entries.forEach(e=>{ if(!e.location) return; const m = L.marker([e.location.lat,e.location.lng]); const html = `<div style="max-width:280px"><div><strong>${new Date(e.createdAt).toLocaleString()}</strong></div><div>${e.boxType} • ${e.holeDiameter_mm} mm</div>${e.retrievalDate?`<div style="color:green">Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}${e.initialPhotoDataURL?`<div style="margin-top:6px"><img src="${e.initialPhotoDataURL}" style="max-width:260px;display:block;margin-top:6px;border-radius:6px;"/></div>`:''}${e.finalPhotoDataURL?`<div style="margin-top:6px"><em>Photo finale:</em><img src="${e.finalPhotoDataURL}" style="max-width:260px;display:block;margin-top:6px;border-radius:6px;"/></div>`:''}</div>`; m.bindPopup(html); m.addTo(markerLayer) }) }
+
+    function renderList(){ const ul = document.getElementById('list'); ul.innerHTML=''; const entries = loadEntries().slice().reverse(); entries.forEach(e=>{ const li = document.createElement('li'); li.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1"><div><strong>${new Date(e.createdAt).toLocaleString()}</strong></div><div style="color:#555">${e.boxType} • ${e.holeDiameter_mm} mm</div><div style="font-size:0.9em;margin-top:6px">${e.location?`${e.location.lat.toFixed(5)}, ${e.location.lng.toFixed(5)} (±${Math.round(e.location.accuracy)}m)`: 'Pas de géoloc'}</div>${e.notes?`<div style="margin-top:6px">${e.notes}</div>`:''}${e.retrievalDate?`<div style="color:green;margin-top:6px">Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}</div><div style="width:100px;text-align:center">${e.initialPhotoDataURL?`<img src="${e.initialPhotoDataURL}" style="max-width:100px;border-radius:6px;display:block;margin-bottom:6px"/>`:''}${e.finalPhotoDataURL?`<img src="${e.finalPhotoDataURL}" style="max-width:100px;border-radius:6px;display:block;margin-top:4px"/>`:''}</div></div>`;
+      const btnView = document.createElement('button'); btnView.textContent='Voir'; btnView.onclick = ()=>{ if(e.location) map.setView([e.location.lat,e.location.lng],14); };
+      const btnRetr = document.createElement('button'); btnRetr.textContent = e.retrievalDate ? 'Annuler récupéré' : 'Marquer récupéré'; btnRetr.onclick = ()=>{ const all = loadEntries(); const idx = all.findIndex(x=>x.id===e.id); if(idx!==-1){ all[idx].retrievalDate = all[idx].retrievalDate ? null : Date.now(); saveEntries(all); renderList(); renderMarkers(); } };
+      const btnAddFinal = document.createElement('button'); btnAddFinal.textContent='Ajouter photo finale'; btnAddFinal.onclick = ()=>openFinalUpload(e.id);
+      const btnDelete = document.createElement('button'); btnDelete.textContent='Supprimer'; btnDelete.onclick = ()=>{ if(!confirm('Supprimer cet enregistrement ?')) return; const all = loadEntries().filter(x=>x.id!==e.id); saveEntries(all); renderList(); renderMarkers(); }
+      li.appendChild(document.createElement('br'))
+      li.appendChild(btnView); li.appendChild(btnRetr); li.appendChild(btnAddFinal); li.appendChild(btnDelete);
+      ul.appendChild(li);
+    })
+    // usage info
+    const info = document.getElementById('storageInfo'); info.textContent = `Stockage local: ${storageUsage()} bytes`;
+  }
+
+    // final photo upload flow: create hidden file input and attach handler
+    function openFinalUpload(id){ const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange = async (ev)=>{ const f = ev.target.files && ev.target.files[0]; if(!f) return; try{ const dataUrl = await compressFileToDataURL(f, 1200, 0.75); const all = loadEntries(); const idx = all.findIndex(x=>x.id===id); if(idx!==-1){ all[idx].finalPhotoDataURL = dataUrl; saveEntries(all); renderList(); renderMarkers(); alert('Photo finale enregistrée localement'); } }catch(err){ console.error(err); alert('Erreur image') } }; inp.click() }
+
+    // form handling with compression
+    const photo = document.getElementById('photo'); const preview = document.getElementById('preview'); let lastDataUrl = null; photo.addEventListener('change', async (ev)=>{ const f = ev.target.files && ev.target.files[0]; if(!f) return; try{ preview.hidden = true; const dataUrl = await compressFileToDataURL(f, 1200, 0.75); lastDataUrl = dataUrl; preview.src = lastDataUrl; preview.hidden = false }catch(err){ console.error(err); const fr = new FileReader(); fr.onload = ()=>{ lastDataUrl = fr.result; preview.src = lastDataUrl; preview.hidden=false }; fr.readAsDataURL(f) } })
+
+    // geoloc
+    let lastLoc = null; document.getElementById('getLoc').addEventListener('click', ()=>{
+      if(!navigator.geolocation) return alert('Géoloc non supportée');
+      navigator.geolocation.getCurrentPosition(p=>{ lastLoc = {lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}; document.getElementById('locInfo').textContent = `${lastLoc.lat.toFixed(5)}, ${lastLoc.lng.toFixed(5)} (±${Math.round(lastLoc.accuracy)}m)` }, e=>alert('Erreur géoloc: '+e.message), {enableHighAccuracy:true, timeout:10000})
+    })
+
+    // save new entry
+    document.getElementById('save').addEventListener('click',async (ev)=>{ ev.preventDefault(); if(!lastDataUrl) return alert('Ajoute une photo'); const entries = loadEntries(); const id = Date.now().toString(36)+Math.random().toString(36).slice(2,8); const entry = { id, createdAt: Date.now(), initialPhotoDataURL: lastDataUrl, location: lastLoc, boxType: document.getElementById('boxType').value, holeDiameter_mm: Number(document.getElementById('hole').value), notes: document.getElementById('notes').value, retrievalDate: null, finalPhotoDataURL: null }; entries.push(entry); saveEntries(entries); // reset
+      photo.value=''; preview.hidden=true; lastDataUrl=null; document.getElementById('locInfo').textContent = lastLoc? `${lastLoc.lat.toFixed(5)}, ${lastLoc.lng.toFixed(5)}` : 'Aucune'; renderList(); renderMarkers(); alert('Enregistré localement'); })
+
+    // export JSON and KML
+    document.getElementById('exportJson').addEventListener('click', ()=>{ const data = JSON.stringify(loadEntries(), null, 2); const blob = new Blob([data], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'solar_entries.json'; a.click(); URL.revokeObjectURL(url); })
+
+    document.getElementById('exportKml').addEventListener('click', ()=>{
+      const entries = loadEntries().filter(e=>e.location)
+      const kmlParts = ['<?xml version="1.0" encoding="UTF-8"?>', '<kml xmlns="http://www.opengis.net/kml/2.2">', '<Document>']
+      entries.forEach(e=>{
+        const name = `Sténopé ${new Date(e.createdAt).toLocaleDateString()}`
+        const desc = `${e.boxType} • ${e.holeDiameter_mm} mm\n${e.notes||''}`
+        kmlParts.push(`<Placemark><name>${escapeXml(name)}</name><description>${escapeXml(desc)}</description><Point><coordinates>${e.location.lng},${e.location.lat},0</coordinates></Point></Placemark>`)
+      })
+      kmlParts.push('</Document></kml>')
+      const blob = new Blob([kmlParts.join('\n')], {type:'application/vnd.google-earth.kml+xml'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'solar_entries.kml'; a.click(); URL.revokeObjectURL(url);
+    })
+
+    function escapeXml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;') }
+
+    // clear all
+    document.getElementById('clearAll').addEventListener('click', ()=>{ if(!confirm('Supprimer toutes les données locales ?')) return; localStorage.removeItem(KEY); renderList(); renderMarkers(); })
+
+    // init
+    renderList(); renderMarkers();
+  </script>
+</body>
+</html>
