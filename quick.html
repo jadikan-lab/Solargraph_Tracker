@@ -91,6 +91,9 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
 .tab .tab-lbl{font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .tab.active{color:var(--blue);border-bottom-color:var(--blue)}
 
+/* filter button active */
+.filter-active{background:var(--blue)!important;color:#fff!important;border-color:var(--blue)!important}
+
 /* ── Panels ── */
 .panel{display:none;flex:1;overflow-y:auto;flex-direction:column;min-height:0;overscroll-behavior:contain}
 .panel.active{display:flex}
@@ -233,8 +236,22 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
   width:28px;height:28px;border-radius:50%;border:3px solid #fff;
   box-shadow:0 2px 6px rgba(0,0,0,.35);
 }
-.map-pin.active{background:#e67e22}
-.map-pin.retrieved{background:#27ae60}
+.map-pin.active{background:#27ae60} /* green = still in place */
+.map-pin.retrieved{background:#e67e22} /* orange = retrieved */
+
+/* map legend */
+/* map legend */
+#mapLegend{
+  position:absolute;top:10px;right:10px;z-index:520;background:rgba(255,255,255,0.95);
+  padding:8px 10px;border-radius:10px;border:1px solid var(--border);font-size:0.85rem;color:#333;
+  box-shadow:0 2px 8px rgba(0,0,0,.12);
+}
+.mapLegendItem{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.mapLegendSwatch{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:6px}
+
+/* ensure legend positioned relative to panel */
+/* ensure legend positioned relative to panel */
+#panelMap{position:relative}
 
 </style>
 </head>
@@ -327,12 +344,39 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
     <label>Notes</label>
     <textarea id="notes" placeholder="Orientation, lieu, conditions…"></textarea>
   </div>
+  <div class="field">
+    <label>Orientation</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="orientationSelect" style="flex:1">
+        <option>N</option><option>NE</option><option>E</option><option>SE</option>
+        <option>S</option><option>SW</option><option>W</option><option>NW</option>
+        <option value="libre">Libre (°)</option>
+      </select>
+      <input id="orientationDegree" type="number" placeholder="°" min="0" max="360" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);display:none">
+    </div>
+  </div>
   <div id="geoStatus">📍 Géoloc en attente…</div>
   <button class="btn-save" id="saveBtn">💾 Enregistrer le sténopé</button>
 </div>
 
 <!-- Panel List -->
 <div id="panelList" class="panel">
+  <div id="listControls" style="display:flex;gap:8px;align-items:center;padding:8px 0 6px">
+    <div style="display:flex;gap:6px">
+      <button class="btn-out" id="filterAll">Tous</button>
+      <button class="btn-out" id="filterOpen">En cours</button>
+      <button class="btn-out" id="filterRetrieved">Récupérés</button>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <label style="font-size:0.85rem;color:#666">Trier:</label>
+      <select id="sortSelect" style="padding:8px;border-radius:8px;border:1px solid var(--border)">
+        <option value="date_desc">Date (récent)</option>
+        <option value="date_asc">Date (ancien)</option>
+        <option value="dur_desc">Durée (longue)</option>
+        <option value="dur_asc">Durée (courte)</option>
+      </select>
+    </div>
+  </div>
   <div id="storageBar"></div>
   <div id="list"></div>
   <div id="exportRow">
@@ -345,6 +389,10 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
 <!-- Panel Map -->
 <div id="panelMap" class="panel">
   <div id="map"></div>
+  <div id="mapLegend">
+    <div class="mapLegendItem"><span class="mapLegendSwatch" style="background:#27ae60"></span> En place</div>
+    <div class="mapLegendItem"><span class="mapLegendSwatch" style="background:#e67e22"></span> Récupéré</div>
+  </div>
 </div>
 
 <!-- Edit modal (bottom sheet) -->
@@ -379,6 +427,17 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
       </select>
     </div>
     <div class="field">
+      <label>Orientation</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="editOrientationSelect" style="flex:1">
+          <option>N</option><option>NE</option><option>E</option><option>SE</option>
+          <option>S</option><option>SW</option><option>W</option><option>NW</option>
+          <option value="libre">Libre (°)</option>
+        </select>
+        <input id="editOrientationDegree" type="number" placeholder="°" min="0" max="360" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);display:none">
+      </div>
+    </div>
+    <div class="field">
       <label>Notes</label>
       <textarea id="editNotes" placeholder="Orientation, lieu, conditions…"></textarea>
     </div>
@@ -408,6 +467,28 @@ let allEntries   = []
 let pendingPhotos = []
 let currentLoc   = null
 let lastDriveSync = null
+// list/filter/sort state
+let currentFilter = 'all' // all | open | retrieved
+let currentSort = 'date_desc'
+
+function applyFilterSort(entries){
+  let out = (entries||[]).slice()
+  // filter
+  if(currentFilter==='open') out = out.filter(e=>!e.retrievalDate)
+  else if(currentFilter==='retrieved') out = out.filter(e=>!!e.retrievalDate)
+  // sort
+  out.sort((a,b)=>{
+    if(currentSort==='date_desc') return (b.createdAt||0)-(a.createdAt||0)
+    if(currentSort==='date_asc') return (a.createdAt||0)-(b.createdAt||0)
+    // duration: use retrieval-created difference (or now-created for open)
+    const da = ((a.retrievalDate||Date.now()) - (a.createdAt||0))
+    const db = ((b.retrievalDate||Date.now()) - (b.createdAt||0))
+    if(currentSort==='dur_desc') return db-da
+    if(currentSort==='dur_asc') return da-db
+    return 0
+  })
+  return out
+}
 
 // ── Toast ─────────────────────────────────────────────
 let _toastTimer = null
@@ -704,19 +785,23 @@ function makeIcon(retrieved){
 
 function renderMarkers(){
   markerLayer.clearLayers()
-  allEntries.forEach(e=>{
+  const items = applyFilterSort(allEntries)
+  items.forEach(e=>{
     if(!e.location) return
     const fp = (e.photos&&e.photos[0])||null
-    L.marker([e.location.lat,e.location.lng],{icon:makeIcon(!!e.retrievalDate)}).bindPopup(
-      `<div style="max-width:260px">
+    const orientationLabel = e.orientation ? (e.orientationDeg? `${e.orientation} (${e.orientationDeg}°)`: e.orientation) : ''
+    const days = e.retrievalDate ? Math.round((e.retrievalDate - e.createdAt)/86400000) : Math.round((Date.now()-e.createdAt)/86400000)
+    const popup = `
+      <div style="max-width:260px">
         <strong>${new Date(e.createdAt).toLocaleString()}</strong>
         <div>${e.boxType} · ${e.holeDiameter_mm}mm · ${e.paperType||''}</div>
-        ${e.retrievalDate?`<div style="color:green">✓ Récupéré ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}
+        ${orientationLabel?`<div>Orientation: ${orientationLabel}</div>`:''}
+        ${e.retrievalDate?`<div style="color:orange">✓ Récupéré ${new Date(e.retrievalDate).toLocaleDateString()}</div><div>Durée: ${days} j</div>`:`<div style="color:green">En place: ${days} j</div>`}
         ${e.notes?`<div style="font-style:italic;margin-top:4px">${e.notes}</div>`:''}
         ${fp?`<img src="${fp}" style="max-width:250px;border-radius:8px;margin-top:8px;display:block">`:''}
-        ${e.finalPhotoDataURL?`<div style="margin-top:6px"><em>Finale:</em><img src="${e.finalPhotoDataURL}" style="max-width:250px;border-radius:8px;margin-top:4px;display:block"></div>`:''}
+        ${e.finalPhotoDataURL?`<div style="margin-top:6px"><em>Finale:</em><br><img src="${e.finalPhotoDataURL}" style="max-width:250px;border-radius:8px;margin-top:4px;display:block"></div>`:''}
       </div>`
-    ).addTo(markerLayer)
+    L.marker([e.location.lat,e.location.lng],{icon:makeIcon(!!e.retrievalDate)}).bindPopup(popup).addTo(markerLayer)
   })
   setTimeout(()=>map.invalidateSize(),100)
 }
@@ -724,11 +809,14 @@ function renderMarkers(){
 // ── List ──────────────────────────────────────────────
 function renderList(){
   const c=document.getElementById('list'); c.innerHTML=''
-  if(!allEntries.length){c.innerHTML='<div class="empty">Aucun sténopé enregistré</div>'; return}
-  allEntries.slice().reverse().forEach(e=>{
+  const items = applyFilterSort(allEntries)
+  if(!items.length){c.innerHTML='<div class="empty">Aucun sténopé enregistré</div>'; return}
+  items.forEach(e=>{
     const thumb=(e.photos&&e.photos[0])||null
     const card=document.createElement('div')
     card.className='entry-card'+(e.retrievalDate?' retrieved':'')
+    const orientationLabel = e.orientation ? (e.orientationDeg? `${e.orientation} (${e.orientationDeg}°)`: e.orientation) : ''
+    const days = e.retrievalDate ? Math.round((e.retrievalDate - e.createdAt)/86400000) : Math.round((Date.now()-e.createdAt)/86400000)
     card.innerHTML=`
       <div class="entry-head">
         ${thumb?`<div class="entry-thumb"><img src="${thumb}" loading="lazy"/></div>`:''}
@@ -738,7 +826,9 @@ function renderList(){
           <span class="entry-chip">${e.holeDiameter_mm}mm</span>
           <span class="entry-chip${e.retrievalDate?' green':''}">${e.paperType||''}</span>
           <div class="entry-meta">${e.location?`📍 ${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)} ±${Math.round(e.location.accuracy)}m`:'📍 Pas de géoloc'}</div>
+          ${orientationLabel?`<div class="entry-meta">Orientation: ${orientationLabel}</div>`:''}
           ${e.notes?`<div class="entry-notes">${e.notes}</div>`:''}
+          <div class="entry-meta">${e.retrievalDate?`Durée: ${days} j`:`En place: ${days} j`}</div>
           ${e.retrievalDate?`<div class="retrieved-badge">✓ Récupéré le ${new Date(e.retrievalDate).toLocaleDateString('fr-FR')}</div>`:''}
         </div>
       </div>
@@ -816,6 +906,20 @@ function openEditModal(id){
   ;[...document.getElementById('editHole').options].forEach(o=>o.selected=(o.value===String(e.holeDiameter_mm)))
   ;[...document.getElementById('editPaperType').options].forEach(o=>o.selected=(o.value===(e.paperType||'')))
   document.getElementById('editNotes').value = e.notes||''
+  // orientation
+  if(e.orientationDeg||e.orientation==='libre'){
+    document.getElementById('editOrientationSelect').value = 'libre'
+    document.getElementById('editOrientationDegree').style.display='block'
+    document.getElementById('editOrientationDegree').value = e.orientationDeg||''
+  } else if(e.orientation){
+    document.getElementById('editOrientationSelect').value = e.orientation
+    document.getElementById('editOrientationDegree').style.display='none'
+    document.getElementById('editOrientationDegree').value = ''
+  } else {
+    document.getElementById('editOrientationSelect').value = 'N'
+    document.getElementById('editOrientationDegree').style.display='none'
+    document.getElementById('editOrientationDegree').value = ''
+  }
 
   renderEditPreviews()
   document.getElementById('editOverlay').classList.add('open')
@@ -852,6 +956,15 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
   allEntries[i].holeDiameter_mm = Number(document.getElementById('editHole').value)
   allEntries[i].paperType    = document.getElementById('editPaperType').value
   allEntries[i].notes        = document.getElementById('editNotes').value
+  // orientation
+  const eo = document.getElementById('editOrientationSelect').value
+  if(eo==='libre'){
+    allEntries[i].orientation = 'libre'
+    allEntries[i].orientationDeg = Number(document.getElementById('editOrientationDegree').value) || null
+  } else {
+    allEntries[i].orientation = eo
+    delete allEntries[i].orientationDeg
+  }
   // If photos changed, clear Drive links for this entry so they re-upload
   delete allEntries[i].myDrivePhotos
   closeEditModal()
@@ -875,12 +988,17 @@ function startGeoloc(){
 document.getElementById('saveBtn').addEventListener('click',async()=>{
   if(!pendingPhotos.length){toast("Ajoute au moins une photo !"); return}
   const id=Date.now().toString(36)+Math.random().toString(36).slice(2,8)
+  // orientation
+  const oSel = document.getElementById('orientationSelect').value
+  const oDeg = document.getElementById('orientationDegree').value
   const entry={id,createdAt:Date.now(),photos:pendingPhotos.slice(),location:currentLoc,
     boxType:document.getElementById('boxType').value,
     holeDiameter_mm:Number(document.getElementById('hole').value),
     paperType:document.getElementById('paperType').value,
     notes:document.getElementById('notes').value,
     retrievalDate:null,finalPhotoDataURL:null}
+  if(oSel==='libre'){ entry.orientation='libre'; entry.orientationDeg = Number(oDeg) || null }
+  else { entry.orientation = oSel }
   allEntries.push(entry)
   await saveAndSync(allEntries)
   pendingPhotos=[];renderPreviews();document.getElementById('notes').value=''
@@ -913,6 +1031,35 @@ function switchTab(tabId){
   if(tabId==='panelMap')setTimeout(()=>map.invalidateSize(),200)
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)))
+
+// ── UI bindings: orientation inputs, filters, sorting
+(function(){
+  const oSel = document.getElementById('orientationSelect')
+  const oDeg = document.getElementById('orientationDegree')
+  if(oSel && oDeg){ oSel.addEventListener('change', function(){ if(this.value==='libre'){ oDeg.style.display='block' } else { oDeg.style.display='none'; oDeg.value='' } }) }
+  const eSel = document.getElementById('editOrientationSelect')
+  const eDeg = document.getElementById('editOrientationDegree')
+  if(eSel && eDeg){ eSel.addEventListener('change', function(){ if(this.value==='libre'){ eDeg.style.display='block' } else { eDeg.style.display='none'; eDeg.value='' } }) }
+
+  // filters
+  const btnAll = document.getElementById('filterAll'), btnOpen=document.getElementById('filterOpen'), btnRet=document.getElementById('filterRetrieved')
+  const setFilter = f=>{
+    currentFilter=f
+    [btnAll,btnOpen,btnRet].forEach(b=>b.classList.toggle('filter-active', false))
+    if(f==='all') btnAll.classList.add('filter-active')
+    if(f==='open') btnOpen.classList.add('filter-active')
+    if(f==='retrieved') btnRet.classList.add('filter-active')
+    renderAll()
+  }
+  if(btnAll) btnAll.addEventListener('click',()=>setFilter('all'))
+  if(btnOpen) btnOpen.addEventListener('click',()=>setFilter('open'))
+  if(btnRet) btnRet.addEventListener('click',()=>setFilter('retrieved'))
+  // sort
+  const sortSel = document.getElementById('sortSelect')
+  if(sortSel) sortSel.addEventListener('change',()=>{ currentSort = sortSel.value; renderAll() })
+  // default
+  setFilter('all')
+})()
 
 // ── Init ──────────────────────────────────────────────
 ;(async()=>{
