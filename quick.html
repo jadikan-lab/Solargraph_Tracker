@@ -20,8 +20,12 @@
   <div id="sidebar">
     <h2>Ajouter sténopé (rapide)</h2>
     <form id="form">
-      <label>Photo initiale<br><input id="photo" type="file" accept="image/*" capture="environment"></label>
-      <img id="preview" class="preview" src="" hidden>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <button id="addPhotoBtn" type="button" style="font-size:1.05rem;padding:10px 14px">📷 Ajouter photo sténopé</button>
+        <button id="saveBtn" type="button" style="font-size:1.05rem;padding:10px 14px;background:#0366d6;color:#fff;border:none;border-radius:6px">💾 Enregistrer</button>
+      </div>
+      <input id="photo" type="file" accept="image/*" capture="environment" style="display:none">
+      <div id="photosPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
       <label>Type de boîte<br>
         <select id="boxType"><option>full</option><option>medium</option><option>small</option></select>
       </label>
@@ -41,15 +45,14 @@
         <button id="getLoc" type="button">Capturer géoloc</button>
         <span id="locInfo">Aucune</span>
       </div>
-      <div>
-        <button id="save">Enregistrer local</button>
-      </div>
+      <!-- bottom save removed; use the big 'Enregistrer' button above -->
     </form>
 
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
       <h3 style="margin:0">Mes sténopés</h3>
       <div style="margin-left:auto">
-        <button id="btnMap">Ouvrir la carte</button>
+        <button id="tabForm">Formulaire</button>
+        <button id="tabMap">Carte</button>
         <button id="exportJson">Export JSON</button>
         <button id="exportKml">Export KML</button>
         <button id="clearAll">Supprimer tout</button>
@@ -96,15 +99,20 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map)
     const markerLayer = L.layerGroup().addTo(map)
 
-    async function renderMarkers(){ markerLayer.clearLayers(); const entries = await loadEntries(); window._lastLocalDump = entries; entries.forEach(e=>{ if(!e.location) return; const m = L.marker([e.location.lat,e.location.lng]); const html = `<div style="max-width:280px"><div><strong>${new Date(e.createdAt).toLocaleString()}</strong></div><div>${e.boxType} • ${e.holeDiameter_mm} mm${e.paperType?` • ${e.paperType}`:''}</div>${e.retrievalDate?`<div style="color:green">Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}${e.initialPhotoDataURL?`<div style="margin-top:6px"><img src="${e.initialPhotoDataURL}" style="max-width:260px;display:block;margin-top:6px;border-radius:6px;"/></div>`:''}${e.finalPhotoDataURL?`<div style="margin-top:6px"><em>Photo finale:</em><img src="${e.finalPhotoDataURL}" style="max-width:260px;display:block;margin-top:6px;border-radius:6px;"/></div>`:''}</div>`; m.bindPopup(html); m.addTo(markerLayer) }) }
+    async function renderMarkers(){ markerLayer.clearLayers(); const entries = await loadEntries(); window._lastLocalDump = entries; entries.forEach(e=>{ if(!e.location) return; const m = L.marker([e.location.lat,e.location.lng]); // show first photo if array
+      const firstPhoto = (e.initialPhotoDataURLs && e.initialPhotoDataURLs[0]) || e.initialPhotoDataURL || null;
+      const finalPhoto = e.finalPhotoDataURL || null;
+      const html = `<div style="max-width:280px"><div><strong>${new Date(e.createdAt).toLocaleString()}</strong></div><div>${e.boxType} • ${e.holeDiameter_mm} mm${e.paperType?` • ${e.paperType}`:''}</div>${e.retrievalDate?`<div style="color:green">Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}${firstPhoto?`<div style="margin-top:6px"><img src="${firstPhoto}" style="max-width:260px;display:block;margin-top:6px;border-radius:6px;"/></div>`:''}${finalPhoto?`<div style="margin-top:6px"><em>Photo finale:</em><img src="${finalPhoto}" style="max-width:260px;display:block;margin-top:6px;border-radius:6px;"/></div>`:''}</div>`; m.bindPopup(html); m.addTo(markerLayer) }) }
 
     async function renderList(){ const ul = document.getElementById('list'); ul.innerHTML=''; const entries = (await loadEntries()).slice().reverse(); window._lastLocalDump = entries;
       entries.forEach(e=>{
         const li = document.createElement('li')
-        li.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1"><div><strong>${new Date(e.createdAt).toLocaleString()}</strong></div><div style="color:#555">${e.boxType} • ${e.holeDiameter_mm} mm${e.paperType?` • ${e.paperType}`:''}</div><div style="font-size:0.9em;margin-top:6px">${e.location?`${e.location.lat.toFixed(5)}, ${e.location.lng.toFixed(5)} (±${Math.round(e.location.accuracy)}m)`: 'Pas de géoloc'}</div>${e.notes?`<div style="margin-top:6px">${e.notes}</div>`:''}${e.retrievalDate?`<div style="color:green;margin-top:6px">Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}</div><div style="width:100px;text-align:center">${e.initialPhotoDataURL?`<img src="${e.initialPhotoDataURL}" style="max-width:100px;border-radius:6px;display:block;margin-bottom:6px"/>`:''}${e.finalPhotoDataURL?`<img src="${e.finalPhotoDataURL}" style="max-width:100px;border-radius:6px;display:block;margin-top:4px"/>`:''}</div></div>`
+        // support array of initial photos
+        const firstThumb = (e.initialPhotoDataURLs && e.initialPhotoDataURLs[0]) || e.initialPhotoDataURL || '';
+        li.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1"><div><strong>${new Date(e.createdAt).toLocaleString()}</strong></div><div style="color:#555">${e.boxType} • ${e.holeDiameter_mm} mm${e.paperType?` • ${e.paperType}`:''}</div><div style="font-size:0.9em;margin-top:6px">${e.location?`${e.location.lat.toFixed(5)}, ${e.location.lng.toFixed(5)} (±${Math.round(e.location.accuracy)}m)`: 'Pas de géoloc'}</div>${e.notes?`<div style="margin-top:6px">${e.notes}</div>`:''}${e.retrievalDate?`<div style="color:green;margin-top:6px">Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}</div><div style="width:120px;text-align:center">${firstThumb?`<img src="${firstThumb}" style="max-width:120px;border-radius:6px;display:block;margin-bottom:6px"/>`:''}${e.finalPhotoDataURL?`<img src="${e.finalPhotoDataURL}" style="max-width:120px;border-radius:6px;display:block;margin-top:4px"/>`:''}</div></div>`
         const btnView = document.createElement('button'); btnView.textContent='Voir'; btnView.onclick = ()=>{ if(e.location) map.setView([e.location.lat,e.location.lng],14); };
         const btnRetr = document.createElement('button'); btnRetr.textContent = e.retrievalDate ? 'Annuler récupéré' : 'Marquer récupéré'; btnRetr.onclick = async ()=>{ const all = await loadEntries(); const idx = all.findIndex(x=>x.id===e.id); if(idx!==-1){ all[idx].retrievalDate = all[idx].retrievalDate ? null : Date.now(); await saveEntries(all); await renderList(); await renderMarkers(); } };
-        const btnAddFinal = document.createElement('button'); btnAddFinal.textContent='Ajouter photo finale'; btnAddFinal.onclick = ()=>openFinalUpload(e.id);
+  const btnAddFinal = document.createElement('button'); btnAddFinal.textContent='Ajouter photo finale'; btnAddFinal.onclick = ()=>openFinalUpload(e.id);
         const btnDelete = document.createElement('button'); btnDelete.textContent='Supprimer'; btnDelete.onclick = async ()=>{ if(!confirm('Supprimer cet enregistrement ?')) return; const all = (await loadEntries()).filter(x=>x.id!==e.id); await saveEntries(all); await renderList(); await renderMarkers(); }
         li.appendChild(document.createElement('br'))
         li.appendChild(btnView); li.appendChild(btnRetr); li.appendChild(btnAddFinal); li.appendChild(btnDelete);
@@ -113,11 +121,30 @@
       const info = document.getElementById('storageInfo'); info.textContent = `Stockage local: approx ${new Blob([JSON.stringify(window._lastLocalDump||[])]).size} bytes`;
     }
 
+
     // final photo upload
     async function openFinalUpload(id){ const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange = async (ev)=>{ const f = ev.target.files && ev.target.files[0]; if(!f) return; try{ const dataUrl = await compressFileToDataURL(f, 1200, 0.75); const all = await loadEntries(); const idx = all.findIndex(x=>x.id===id); if(idx!==-1){ all[idx].finalPhotoDataURL = dataUrl; await saveEntries(all); await renderList(); await renderMarkers(); alert('Photo finale enregistrée localement'); } }catch(err){ console.error(err); alert('Erreur image') } }; inp.click() }
 
-    // form handling with compression
-    const photo = document.getElementById('photo'); const preview = document.getElementById('preview'); let lastDataUrl = null; photo.addEventListener('change', async (ev)=>{ const f = ev.target.files && ev.target.files[0]; if(!f) return; try{ preview.hidden = true; const dataUrl = await compressFileToDataURL(f, 1200, 0.75); lastDataUrl = dataUrl; preview.src = lastDataUrl; preview.hidden = false }catch(err){ console.error(err); const fr = new FileReader(); fr.onload = ()=>{ lastDataUrl = fr.result; preview.src = lastDataUrl; preview.hidden=false }; fr.readAsDataURL(f) } })
+    // form handling with compression and multiple photos
+    const photoInput = document.getElementById('photo'); const photosPreview = document.getElementById('photosPreview'); let lastPhotos = [];
+    function renderPhotosPreview(){ photosPreview.innerHTML = ''; lastPhotos.forEach((d, i)=>{ const img = document.createElement('img'); img.src = d; img.style.maxWidth='120px'; img.style.borderRadius='6px'; img.style.display='block'; img.style.marginBottom='4px'; const holder = document.createElement('div'); holder.style.position='relative'; holder.style.display='inline-block'; holder.style.marginRight='6px'; const del = document.createElement('button'); del.textContent='×'; del.style.position='absolute'; del.style.top='2px'; del.style.right='2px'; del.style.background='rgba(0,0,0,0.6)'; del.style.color='#fff'; del.style.border='none'; del.style.borderRadius='50%'; del.style.width='22px'; del.style.height='22px'; del.onclick = ()=>{ lastPhotos.splice(i,1); renderPhotosPreview(); }; holder.appendChild(img); holder.appendChild(del); photosPreview.appendChild(holder); }) }
+
+    photoInput.addEventListener('change', async (ev)=>{ const f = ev.target.files && ev.target.files[0]; if(!f) return; try{ const dataUrl = await compressFileToDataURL(f, 1200, 0.75); lastPhotos.push(dataUrl); renderPhotosPreview(); } catch(err){ console.error(err); alert('Erreur lors de la lecture de l\'image') } finally { photoInput.value = '' } })
+    document.getElementById('addPhotoBtn').addEventListener('click', ()=>photoInput.click())
+
+    // choose which tab to show
+    document.getElementById('tabMap').addEventListener('click', ()=>{ document.getElementById('sidebar').style.display='none'; document.getElementById('map').style.display='block'; setTimeout(()=>map.invalidateSize(),200); })
+    document.getElementById('tabForm').addEventListener('click', ()=>{ document.getElementById('sidebar').style.display='block'; document.getElementById('map').style.display='block'; setTimeout(()=>map.invalidateSize(),200); })
+
+    // save new entry (big button)
+    document.getElementById('saveBtn').addEventListener('click', async (ev)=>{
+      ev.preventDefault(); if(lastPhotos.length === 0) return alert('Ajoute au moins une photo');
+      const entries = await loadEntries(); const id = Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+      const entry = { id, createdAt: Date.now(), initialPhotoDataURLs: lastPhotos.slice(), location: lastLoc, boxType: document.getElementById('boxType').value, holeDiameter_mm: Number(document.getElementById('hole').value), paperType: document.getElementById('paperType').value, notes: document.getElementById('notes').value, retrievalDate: null, finalPhotoDataURL: null };
+      entries.push(entry); await saveEntries(entries);
+      // reset form
+      lastPhotos = []; renderPhotosPreview(); document.getElementById('notes').value=''; document.getElementById('locInfo').textContent = lastLoc? `${lastLoc.lat.toFixed(5)}, ${lastLoc.lng.toFixed(5)}` : 'Aucune'; await renderList(); await renderMarkers(); alert('Enregistré localement');
+    })
 
     // geoloc
     let lastLoc = null; document.getElementById('getLoc').addEventListener('click', ()=>{
