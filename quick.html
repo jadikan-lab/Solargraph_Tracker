@@ -348,6 +348,21 @@ async function uploadDataURLToFolder(dataURL, filename, folderId){
   fd.append('metadata', new Blob([meta],{type:'application/json'}));
   fd.append('file', blob, filename)
   const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
+  const j = await r.json()
+  if (j && j.id) {
+    const meta = await getFileMeta(j.id)
+    return Object.assign({}, j, meta)
+  }
+  return j
+}
+async function driveFindFileInFolder(folderId, filename){
+  const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents`)
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
+  const d = await r.json()
+  return d.files && d.files[0] ? d.files[0].id : null
+}
+async function getFileMeta(fileId){
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,webViewLink`,{headers:{Authorization:`Bearer ${gToken}`}})
   return await r.json()
 }
 async function uploadJSONToFolder(obj, filename, folderId){
@@ -374,23 +389,55 @@ async function publishEntriesToMyDrive(entries){
   const folderName = 'Solargraph_Tracker'
   let folderId = await driveFindFolder(folderName)
   if(!folderId) folderId = await driveCreateFolder(folderName)
-  // upload photos and collect fileIds
+  // upload photos and collect fileIds (avoid duplicates)
+  let total = 0; for(const e of entries) total += (e.photos||[]).length + (e.finalPhotoDataURL?1:0)
+  let done = 0
+  const setProgress = txt=>{ try{document.getElementById('publishStatus').textContent = txt}catch(e){} }
   for(const e of entries){
     e.myDrivePhotos = e.myDrivePhotos || []
     for(let i=0;i<(e.photos||[]).length;i++){
       const url = e.photos[i]
       const fname = `${e.id}_${i}.jpg`
-      // naive upload each time - could check existing but ok for now
-      const res = await uploadDataURLToFolder(url,fname,folderId)
-      if(res && res.id) e.myDrivePhotos.push({fileId:res.id, name:res.name, webViewLink:res.webViewLink})
+      // reuse existing recorded fileId if present
+      let reused = null
+      if(e.myDrivePhotos[i] && e.myDrivePhotos[i].fileId){
+        reused = e.myDrivePhotos[i]
+      } else {
+        // check whether file exists in folder (previous publish)
+        const existingId = await driveFindFileInFolder(folderId, fname)
+        if(existingId){
+          const meta = await getFileMeta(existingId)
+          reused = { fileId: meta.id, name: meta.name, webViewLink: meta.webViewLink }
+        } else {
+          const res = await uploadDataURLToFolder(url,fname,folderId)
+          if(res && res.id) reused = { fileId: res.id, name: res.name, webViewLink: res.webViewLink }
+        }
+      }
+      if(reused) e.myDrivePhotos[i]=reused
+      done++
+      setProgress(`Publier photos ${done}/${total}`)
     }
     if(e.finalPhotoDataURL){
-      const resf = await uploadDataURLToFolder(e.finalPhotoDataURL,`${e.id}_final.jpg`,folderId)
-      if(resf && resf.id) e.myDriveFinal = {fileId:resf.id, name:resf.name, webViewLink:resf.webViewLink}
+      const fname = `${e.id}_final.jpg`
+      if(!(e.myDriveFinal && e.myDriveFinal.fileId)){
+        const existingId = await driveFindFileInFolder(folderId, fname)
+        if(existingId){
+          const meta = await getFileMeta(existingId)
+          e.myDriveFinal = { fileId: meta.id, name: meta.name, webViewLink: meta.webViewLink }
+        } else {
+          const resf = await uploadDataURLToFolder(e.finalPhotoDataURL,fname,folderId)
+          if(resf && resf.id) e.myDriveFinal = { fileId: resf.id, name: resf.name, webViewLink: resf.webViewLink }
+        }
+      }
+      done++
+      setProgress(`Publier photos ${done}/${total}`)
     }
   }
   // upload metadata file
   const metaRes = await uploadJSONToFolder(entries, 'solargraph_entries.json', folderId)
+  setProgress('Publier terminé')
+  try{ await localSave(entries); if(gToken) await driveWrite(entries) }catch(e){}
+  try{ setTimeout(()=>{ document.getElementById('publishStatus').textContent=''},2000) }catch(e){}
   return {folderId, metaRes}
 }
 
