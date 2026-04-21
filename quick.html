@@ -61,7 +61,9 @@
 <div id="header">
   <h1>🌞 Solargraph Tracker</h1>
   <span id="authStatus"></span>
+  <span id="driveInfo" style="margin-left:8px;font-size:0.85rem;color:#cfe8ff"></span>
   <button id="authBtn">Connexion Google</button>
+  <button id="checkDriveBtn" style="margin-left:8px;padding:6px 8px;font-size:0.8rem;">Vérifier Drive</button>
 </div>
 
 <div id="tabs">
@@ -121,6 +123,7 @@ let driveFileId  = null
 let allEntries   = []
 let pendingPhotos = []
 let currentLoc   = null
+let lastDriveSync = null
 
 // ── Local IndexedDB ─────────────────────────────────────
 async function localLoad() {
@@ -149,6 +152,7 @@ async function driveWrite(entries) {
       headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': 'application/json' },
       body: content
     })
+    lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
   } else {
     const bnd = 'solar_bnd_' + Date.now()
     const meta = JSON.stringify({ name: DRIVE_FILENAME, parents: ['appDataFolder'] })
@@ -160,6 +164,7 @@ async function driveWrite(entries) {
     })
     const d = await r.json()
     if (d.id) driveFileId = d.id
+    lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
   }
 }
 async function syncFromDrive() {
@@ -168,6 +173,7 @@ async function syncFromDrive() {
     if (driveFileId) {
       allEntries = await driveRead(driveFileId)
       await localSave(allEntries)
+      lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
     } else if (allEntries.length > 0) {
       await driveWrite(allEntries) // first login: push local → Drive
     }
@@ -283,6 +289,29 @@ function renderStorageBar() {
     `~${(sz/1024).toFixed(1)} KB${gToken?' · ✓ sync Google Drive':' · local uniquement'}`
 }
 function renderAll() { renderList(); renderMarkers(); renderStorageBar() }
+
+function updateDriveInfo(){
+  const el = document.getElementById('driveInfo')
+  if(!el) return
+  if(!gToken){ el.textContent = ''; return }
+  try{
+    const v = localStorage.getItem('lastDriveSync')
+    if(v){ el.textContent = `Drive: ${(allEntries||[]).length} entrées · dernière sync ${new Date(Number(v)).toLocaleString()}` }
+    else el.textContent = `Drive: ${(allEntries||[]).length} entrées` 
+  }catch(e){ el.textContent = `Drive: ${(allEntries||[]).length} entrées` }
+}
+
+async function checkDriveStatus(){
+  if(!gToken){ alert('Connecte-toi d\u2019abord à Google pour vérifier Drive.'); return }
+  try{
+    const fid = await driveFind()
+    if(!fid){ alert('Aucun fichier de synchronisation trouvé dans appDataFolder.') ; return }
+    const data = await driveRead(fid)
+    alert(`Drive: trouvé ${Array.isArray(data)?data.length:0} entrées. Dernière sync locale: ${localStorage.getItem('lastDriveSync')?new Date(Number(localStorage.getItem('lastDriveSync'))).toLocaleString():'n/a'}`)
+  }catch(e){ alert('Erreur en accédant à Drive: '+(e.message||e)) }
+}
+
+document.getElementById('checkDriveBtn').addEventListener('click',checkDriveStatus)
 
 // ── Photos ────────────────────────────────────────────────
 document.getElementById('addPhotoBtn').addEventListener('click', ()=>document.getElementById('photoInput').click())
