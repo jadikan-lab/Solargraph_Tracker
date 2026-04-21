@@ -1,187 +1,373 @@
 <!doctype html>
-<html>
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Solargraph Quick</title>
+  <title>Solargraph Tracker</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
-    body{font-family:system-ui, -apple-system, Roboto, Arial;margin:0;height:100vh;display:flex}
-    #sidebar{width:360px;padding:12px;background:#f7f7f7;overflow:auto}
-    #map{flex:1}
-    .preview{max-width:100%;border-radius:6px;margin:6px 0}
-    label{display:block;margin:8px 0}
-    button{margin-right:6px}
-    li{margin:8px 0;padding:6px;border:1px solid #eee}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,Roboto,sans-serif;height:100dvh;display:flex;flex-direction:column;background:#f4f4f6}
+    #header{background:#1a1a2e;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+    #header h1{font-size:1.05rem;flex:1}
+    #authStatus{font-size:0.75rem;color:#9ecaff;white-space:nowrap}
+    #authBtn{background:#0366d6;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:0.85rem;white-space:nowrap}
+    #tabs{display:flex;background:#fff;border-bottom:2px solid #e0e0e0;flex-shrink:0}
+    .tab{flex:1;padding:11px 4px;text-align:center;border:none;background:none;cursor:pointer;font-size:0.9rem;color:#666;border-bottom:3px solid transparent;margin-bottom:-2px}
+    .tab.active{color:#0366d6;border-bottom-color:#0366d6;font-weight:700}
+    .panel{display:none;flex:1;overflow:auto;flex-direction:column;min-height:0}
+    .panel.active{display:flex}
+    #panelForm{padding:14px;gap:10px}
+    #panelList{padding:12px;gap:8px}
+    #panelMap{padding:0}
+    #map{flex:1;min-height:0}
+    .btn-photo{display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;color:#0366d6;border:2px dashed #0366d6;border-radius:10px;padding:14px;font-size:1.05rem;cursor:pointer;width:100%;font-weight:600}
+    .btn-photo:active{background:#e8f0fe}
+    .btn-save{display:flex;align-items:center;justify-content:center;gap:8px;background:#28a745;color:#fff;border:none;border-radius:10px;padding:14px;font-size:1.1rem;font-weight:700;cursor:pointer;width:100%;margin-top:4px}
+    .btn-save:active{background:#218838}
+    .field label{display:block;font-size:0.8rem;font-weight:600;color:#444;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
+    .field select,.field textarea{width:100%;padding:9px 10px;border:1px solid #ccc;border-radius:8px;font-size:1rem;background:#fff}
+    .field textarea{resize:vertical}
+    #photosPreview{display:flex;flex-wrap:wrap;gap:6px}
+    .photo-thumb{position:relative}
+    .photo-thumb img{width:76px;height:76px;object-fit:cover;border-radius:8px;display:block}
+    .photo-thumb .del{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.75rem;line-height:20px;text-align:center;padding:0}
+    #geoStatus{font-size:0.85rem;padding:6px 10px;background:#fff;border-radius:8px;border:1px solid #e0e0e0}
+    #geoStatus.ok{color:#28a745;border-color:#28a745}
+    #geoStatus.err{color:#dc3545;border-color:#dc3545}
+    .entry-card{background:#fff;border:1px solid #e6e6e6;border-radius:10px;padding:10px;flex-shrink:0}
+    .entry-card.retrieved{opacity:.65}
+    .entry-head{display:flex;gap:10px}
+    .entry-thumb img{width:72px;height:72px;object-fit:cover;border-radius:8px;display:block}
+    .entry-info{flex:1;min-width:0}
+    .entry-date{font-weight:700;font-size:0.9rem}
+    .entry-meta{font-size:0.82rem;color:#555;margin-top:2px}
+    .entry-notes{font-size:0.82rem;color:#333;margin-top:4px;font-style:italic}
+    .retrieved-badge{color:#28a745;font-size:0.82rem;margin-top:3px;font-weight:600}
+    .entry-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+    .btn-xs{background:#fff;border:1px solid #ccc;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:0.8rem}
+    .btn-xs.danger{color:#dc3545;border-color:#dc3545}
+    #storageBar{font-size:0.75rem;color:#888;text-align:right;flex-shrink:0}
+    #exportRow{display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;padding-top:6px;border-top:1px solid #eee;margin-top:auto}
+    .btn-out{background:#fff;border:1px solid #ccc;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:0.82rem}
+    .btn-danger-sm{background:#dc3545;color:#fff;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:0.82rem}
+    .empty{text-align:center;color:#aaa;padding:32px;font-size:0.95rem}
   </style>
 </head>
 <body>
-  <div id="sidebar">
-    <h2>Ajouter sténopé (rapide)</h2>
-    <form id="form">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-        <button id="addPhotoBtn" type="button" style="font-size:1.05rem;padding:10px 14px">📷 Ajouter photo sténopé</button>
-        <button id="saveBtn" type="button" style="font-size:1.05rem;padding:10px 14px;background:#0366d6;color:#fff;border:none;border-radius:6px">💾 Enregistrer</button>
-      </div>
-      <input id="photo" type="file" accept="image/*" capture="environment" style="display:none">
-      <div id="photosPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
-      <label>Type de boîte<br>
-        <select id="boxType"><option>full</option><option>medium</option><option>small</option></select>
-      </label>
-      <label>Diamètre (mm)<br>
-        <select id="hole"><option>0.26</option><option>0.4</option><option>0.5</option></select>
-      </label>
-      <label>Type de papier<br>
-        <select id="paperType">
-          <option>Fomaspeed 311</option>
-          <option>RA4 Fujichristal</option>
-          <option>Ilford RC</option>
-          <option>Ilford FB</option>
-        </select>
-      </label>
-      <label>Notes<br><textarea id="notes" rows="2" style="width:100%"></textarea></label>
-      <div style="margin:6px 0">
-        <button id="getLoc" type="button">Capturer géoloc</button>
-        <span id="locInfo">Aucune</span>
-      </div>
-      <!-- bottom save removed; use the big 'Enregistrer' button above -->
-    </form>
 
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <h3 style="margin:0">Mes sténopés</h3>
-      <div style="margin-left:auto">
-        <button id="tabForm">Formulaire</button>
-        <button id="tabMap">Carte</button>
-        <button id="exportJson">Export JSON</button>
-        <button id="exportKml">Export KML</button>
-        <button id="clearAll">Supprimer tout</button>
-      </div>
-    </div>
-    <div id="storageInfo" style="font-size:0.85em;color:#666;margin-bottom:6px"></div>
-    <ul id="list"></ul>
+<div id="header">
+  <h1>🌞 Solargraph Tracker</h1>
+  <span id="authStatus"></span>
+  <button id="authBtn">Connexion Google</button>
+</div>
+
+<div id="tabs">
+  <button class="tab active" data-tab="panelForm">📷 Ajouter</button>
+  <button class="tab" data-tab="panelList">📋 Liste</button>
+  <button class="tab" data-tab="panelMap">🗺 Carte</button>
+</div>
+
+<div id="panelForm" class="panel active">
+  <button class="btn-photo" id="addPhotoBtn">📷 Ajouter photo(s) sténopé</button>
+  <input id="photoInput" type="file" accept="image/*" capture="environment" style="display:none" multiple>
+  <div id="photosPreview"></div>
+  <div class="field"><label>Type de boîte</label><select id="boxType"><option>full</option><option>medium</option><option>small</option></select></div>
+  <div class="field"><label>Diamètre trou (mm)</label><select id="hole"><option>0.26</option><option>0.4</option><option>0.5</option></select></div>
+  <div class="field">
+    <label>Type de papier</label>
+    <select id="paperType">
+      <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option>
+    </select>
   </div>
+  <div class="field"><label>Notes</label><textarea id="notes" rows="2" placeholder="Orientation, lieu, conditions…"></textarea></div>
+  <div id="geoStatus">📍 Géoloc en attente…</div>
+  <button class="btn-save" id="saveBtn">💾 Enregistrer le sténopé</button>
+</div>
+
+<div id="panelList" class="panel">
+  <div id="storageBar"></div>
+  <div id="list"></div>
+  <div id="exportRow">
+    <button class="btn-out" id="exportJson">⬇ JSON</button>
+    <button class="btn-out" id="exportKml">⬇ KML</button>
+    <button class="btn-danger-sm" id="clearAll">🗑 Tout supprimer</button>
+  </div>
+</div>
+
+<div id="panelMap" class="panel">
   <div id="map"></div>
+</div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    // Using localforage (IndexedDB) to store entries reliably including images.
-    localforage.config({name: 'solargraph_trk'})
-    const KEY = 'solar_entries_v1'
-    async function loadEntries(){ try { const v = await localforage.getItem(KEY); return v || [] } catch(e){ console.error(e); return [] } }
-    async function saveEntries(arr){ await localforage.setItem(KEY, arr) }
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════
+// CONFIG — Remplace par ton Google OAuth2 Client ID
+// Voir README.md section "Sync Google Drive" pour l'obtenir
+// ══════════════════════════════════════════════════════════
+const GOOGLE_CLIENT_ID = 'REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID'
+// ══════════════════════════════════════════════════════════
 
-    function storageUsage(){ try { const s = JSON.stringify(window._lastLocalDump||[]); return new Blob([s]).size } catch(e){ return 0 } }
+const DRIVE_SCOPE    = 'https://www.googleapis.com/auth/drive.appdata'
+const DRIVE_FILENAME = 'solargraph_entries.json'
+const IDB_KEY        = 'solar_entries_v3'
 
-    // Image compression/resizing via canvas (returns dataURL)
-    function compressFileToDataURL(file, maxWidth=1200, quality=0.7){
-      return new Promise((resolve, reject)=>{
-        const img = new Image();
-        const fr = new FileReader();
-        fr.onload = ()=>{
-          img.onload = ()=>{
-            let w = img.width, h = img.height
-            if (w > maxWidth){ h = Math.round(h * (maxWidth / w)); w = maxWidth }
-            const c = document.createElement('canvas'); c.width = w; c.height = h
-            const ctx = c.getContext('2d'); ctx.drawImage(img,0,0,w,h)
-            try{ const dataUrl = c.toDataURL('image/jpeg', quality); resolve(dataUrl) }catch(err){ reject(err) }
-          }
-          img.onerror = (e)=> reject(e)
-          img.src = fr.result
-        }
-        fr.onerror = (e)=> reject(e)
-        fr.readAsDataURL(file)
-      })
+localforage.config({ name: 'solargraph_trk' })
+
+let gToken       = null
+let driveFileId  = null
+let allEntries   = []
+let pendingPhotos = []
+let currentLoc   = null
+
+// ── Local IndexedDB ─────────────────────────────────────
+async function localLoad() {
+  try { return (await localforage.getItem(IDB_KEY)) || [] } catch { return [] }
+}
+async function localSave(arr) { await localforage.setItem(IDB_KEY, arr) }
+
+// ── Google Drive ─────────────────────────────────────────
+async function driveFind() {
+  const q = encodeURIComponent(`name='${DRIVE_FILENAME}'`)
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}`,
+    { headers: { Authorization: `Bearer ${gToken}` } })
+  const d = await r.json()
+  return d.files && d.files[0] ? d.files[0].id : null
+}
+async function driveRead(fid) {
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fid}?alt=media`,
+    { headers: { Authorization: `Bearer ${gToken}` } })
+  return r.json()
+}
+async function driveWrite(entries) {
+  const content = JSON.stringify(entries)
+  if (driveFileId) {
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': 'application/json' },
+      body: content
+    })
+  } else {
+    const bnd = 'solar_bnd_' + Date.now()
+    const meta = JSON.stringify({ name: DRIVE_FILENAME, parents: ['appDataFolder'] })
+    const body = `--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${bnd}--`
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${gToken}`, 'Content-Type': `multipart/related; boundary=${bnd}` },
+      body
+    })
+    const d = await r.json()
+    if (d.id) driveFileId = d.id
+  }
+}
+async function syncFromDrive() {
+  try {
+    driveFileId = await driveFind()
+    if (driveFileId) {
+      allEntries = await driveRead(driveFileId)
+      await localSave(allEntries)
+    } else if (allEntries.length > 0) {
+      await driveWrite(allEntries) // first login: push local → Drive
     }
+  } catch(e) { console.error('Drive sync error:', e) }
+}
+async function saveAndSync(arr) {
+  allEntries = arr
+  await localSave(arr)
+  if (gToken) { try { await driveWrite(arr) } catch(e) { console.error('Drive write:', e) } }
+  renderAll()
+}
 
-    // Map
-    const map = L.map('map').setView([46, 2], 5)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map)
-    const markerLayer = L.layerGroup().addTo(map)
-
-    async function renderMarkers(){ markerLayer.clearLayers(); const entries = await loadEntries(); window._lastLocalDump = entries; entries.forEach(e=>{ if(!e.location) return; const m = L.marker([e.location.lat,e.location.lng]); // show first photo if array
-      const firstPhoto = (e.initialPhotoDataURLs && e.initialPhotoDataURLs[0]) || e.initialPhotoDataURL || null;
-      const finalPhoto = e.finalPhotoDataURL || null;
-      const html = `<div style="max-width:280px"><div><strong>${new Date(e.createdAt).toLocaleString()}</strong></div><div>${e.boxType} • ${e.holeDiameter_mm} mm${e.paperType?` • ${e.paperType}`:''}</div>${e.retrievalDate?`<div style="color:green">Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}${firstPhoto?`<div style="margin-top:6px"><img src="${firstPhoto}" style="max-width:260px;display:block;margin-top:6px;border-radius:6px;"/></div>`:''}${finalPhoto?`<div style="margin-top:6px"><em>Photo finale:</em><img src="${finalPhoto}" style="max-width:260px;display:block;margin-top:6px;border-radius:6px;"/></div>`:''}</div>`; m.bindPopup(html); m.addTo(markerLayer) }) }
-
-    async function renderList(){ const ul = document.getElementById('list'); ul.innerHTML=''; const entries = (await loadEntries()).slice().reverse(); window._lastLocalDump = entries;
-      entries.forEach(e=>{
-        const li = document.createElement('li')
-        // support array of initial photos
-        const firstThumb = (e.initialPhotoDataURLs && e.initialPhotoDataURLs[0]) || e.initialPhotoDataURL || '';
-        li.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1"><div><strong>${new Date(e.createdAt).toLocaleString()}</strong></div><div style="color:#555">${e.boxType} • ${e.holeDiameter_mm} mm${e.paperType?` • ${e.paperType}`:''}</div><div style="font-size:0.9em;margin-top:6px">${e.location?`${e.location.lat.toFixed(5)}, ${e.location.lng.toFixed(5)} (±${Math.round(e.location.accuracy)}m)`: 'Pas de géoloc'}</div>${e.notes?`<div style="margin-top:6px">${e.notes}</div>`:''}${e.retrievalDate?`<div style="color:green;margin-top:6px">Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}</div><div style="width:120px;text-align:center">${firstThumb?`<img src="${firstThumb}" style="max-width:120px;border-radius:6px;display:block;margin-bottom:6px"/>`:''}${e.finalPhotoDataURL?`<img src="${e.finalPhotoDataURL}" style="max-width:120px;border-radius:6px;display:block;margin-top:4px"/>`:''}</div></div>`
-        const btnView = document.createElement('button'); btnView.textContent='Voir'; btnView.onclick = ()=>{ if(e.location) map.setView([e.location.lat,e.location.lng],14); };
-        const btnRetr = document.createElement('button'); btnRetr.textContent = e.retrievalDate ? 'Annuler récupéré' : 'Marquer récupéré'; btnRetr.onclick = async ()=>{ const all = await loadEntries(); const idx = all.findIndex(x=>x.id===e.id); if(idx!==-1){ all[idx].retrievalDate = all[idx].retrievalDate ? null : Date.now(); await saveEntries(all); await renderList(); await renderMarkers(); } };
-  const btnAddFinal = document.createElement('button'); btnAddFinal.textContent='Ajouter photo finale'; btnAddFinal.onclick = ()=>openFinalUpload(e.id);
-        const btnDelete = document.createElement('button'); btnDelete.textContent='Supprimer'; btnDelete.onclick = async ()=>{ if(!confirm('Supprimer cet enregistrement ?')) return; const all = (await loadEntries()).filter(x=>x.id!==e.id); await saveEntries(all); await renderList(); await renderMarkers(); }
-        li.appendChild(document.createElement('br'))
-        li.appendChild(btnView); li.appendChild(btnRetr); li.appendChild(btnAddFinal); li.appendChild(btnDelete);
-        ul.appendChild(li);
-      })
-      const info = document.getElementById('storageInfo'); info.textContent = `Stockage local: approx ${new Blob([JSON.stringify(window._lastLocalDump||[])]).size} bytes`;
+// ── Google Auth ───────────────────────────────────────────
+function initGoogleAuth() {
+  if (GOOGLE_CLIENT_ID === 'REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID') {
+    const btn = document.getElementById('authBtn')
+    btn.textContent = 'Sync Drive (voir README)'; btn.disabled = true; btn.style.opacity = '0.5'
+    document.getElementById('authStatus').textContent = '(local uniquement)'
+    return
+  }
+  if (typeof google === 'undefined' || !google.accounts) return
+  window.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID, scope: DRIVE_SCOPE,
+    callback: async resp => {
+      if (resp.error) { alert('Erreur auth Google: ' + resp.error); return }
+      gToken = resp.access_token
+      updateAuthUI(true)
+      await syncFromDrive()
+      renderAll()
     }
+  })
+}
+document.getElementById('authBtn').addEventListener('click', () => {
+  if (gToken) {
+    google.accounts.oauth2.revoke(gToken, () => { gToken = null; updateAuthUI(false) })
+  } else {
+    if (window.tokenClient) window.tokenClient.requestAccessToken()
+    else alert('SDK Google non chargé, attends 2s et réessaie')
+  }
+})
+function updateAuthUI(loggedIn) {
+  document.getElementById('authBtn').textContent = loggedIn ? 'Déconnexion' : 'Connexion Google'
+  document.getElementById('authStatus').textContent = loggedIn ? '✓ Sync Drive' : ''
+  renderStorageBar()
+}
 
+// ── Map ───────────────────────────────────────────────────
+const map = L.map('map').setView([46, 2], 5)
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map)
+const markerLayer = L.layerGroup().addTo(map)
 
-    // final photo upload
-    async function openFinalUpload(id){ const inp = document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.onchange = async (ev)=>{ const f = ev.target.files && ev.target.files[0]; if(!f) return; try{ const dataUrl = await compressFileToDataURL(f, 1200, 0.75); const all = await loadEntries(); const idx = all.findIndex(x=>x.id===id); if(idx!==-1){ all[idx].finalPhotoDataURL = dataUrl; await saveEntries(all); await renderList(); await renderMarkers(); alert('Photo finale enregistrée localement'); } }catch(err){ console.error(err); alert('Erreur image') } }; inp.click() }
+function renderMarkers() {
+  markerLayer.clearLayers()
+  allEntries.forEach(e => {
+    if (!e.location) return
+    const fp = (e.photos && e.photos[0]) || null
+    const popup = `<div style="max-width:260px">
+      <strong>${new Date(e.createdAt).toLocaleString()}</strong>
+      <div>${e.boxType} · ${e.holeDiameter_mm}mm · ${e.paperType||''}</div>
+      ${e.retrievalDate?`<div style="color:green">✓ Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}
+      ${e.notes?`<div style="margin-top:4px;font-style:italic">${e.notes}</div>`:''}
+      ${fp?`<img src="${fp}" style="max-width:250px;border-radius:6px;margin-top:8px;display:block"/>`:''}
+      ${e.finalPhotoDataURL?`<div style="margin-top:6px"><em>Finale:</em><img src="${e.finalPhotoDataURL}" style="max-width:250px;border-radius:6px;margin-top:4px;display:block"/></div>`:''}
+    </div>`
+    L.marker([e.location.lat, e.location.lng]).bindPopup(popup).addTo(markerLayer)
+  })
+  setTimeout(() => map.invalidateSize(), 100)
+}
 
-    // form handling with compression and multiple photos
-    const photoInput = document.getElementById('photo'); const photosPreview = document.getElementById('photosPreview'); let lastPhotos = [];
-    function renderPhotosPreview(){ photosPreview.innerHTML = ''; lastPhotos.forEach((d, i)=>{ const img = document.createElement('img'); img.src = d; img.style.maxWidth='120px'; img.style.borderRadius='6px'; img.style.display='block'; img.style.marginBottom='4px'; const holder = document.createElement('div'); holder.style.position='relative'; holder.style.display='inline-block'; holder.style.marginRight='6px'; const del = document.createElement('button'); del.textContent='×'; del.style.position='absolute'; del.style.top='2px'; del.style.right='2px'; del.style.background='rgba(0,0,0,0.6)'; del.style.color='#fff'; del.style.border='none'; del.style.borderRadius='50%'; del.style.width='22px'; del.style.height='22px'; del.onclick = ()=>{ lastPhotos.splice(i,1); renderPhotosPreview(); }; holder.appendChild(img); holder.appendChild(del); photosPreview.appendChild(holder); }) }
+// ── List ──────────────────────────────────────────────────
+function renderList() {
+  const container = document.getElementById('list')
+  container.innerHTML = ''
+  if (!allEntries.length) { container.innerHTML = '<div class="empty">Aucun sténopé enregistré</div>'; return }
+  allEntries.slice().reverse().forEach(e => {
+    const thumb = (e.photos && e.photos[0]) || null
+    const card = document.createElement('div')
+    card.className = 'entry-card' + (e.retrievalDate ? ' retrieved' : '')
+    card.innerHTML = `
+      <div class="entry-head">
+        ${thumb?`<div class="entry-thumb"><img src="${thumb}"/></div>`:''}
+        <div class="entry-info">
+          <div class="entry-date">${new Date(e.createdAt).toLocaleString()}</div>
+          <div class="entry-meta">${e.boxType} · ${e.holeDiameter_mm}mm · ${e.paperType||''}</div>
+          <div class="entry-meta">${e.location?`📍 ${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)} ±${Math.round(e.location.accuracy)}m`:'📍 Pas de géoloc'}</div>
+          ${e.notes?`<div class="entry-notes">${e.notes}</div>`:''}
+          ${e.retrievalDate?`<div class="retrieved-badge">✓ Récupéré: ${new Date(e.retrievalDate).toLocaleDateString()}</div>`:''}
+        </div>
+      </div>
+      <div class="entry-actions"></div>`
+    const act = card.querySelector('.entry-actions')
+    const mk = (label, fn, danger) => { const b=document.createElement('button'); b.className='btn-xs'+(danger?' danger':''); b.textContent=label; b.onclick=fn; return b }
+    act.appendChild(mk('🗺 Voir', () => { switchTab('panelMap'); if(e.location) setTimeout(()=>map.setView([e.location.lat,e.location.lng],15),300) }))
+    act.appendChild(mk(e.retrievalDate?'↩ Annuler':'✓ Récupéré', async()=>{ const i=allEntries.findIndex(x=>x.id===e.id); if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now(); await saveAndSync(allEntries)} }))
+    act.appendChild(mk('📷 Photo finale', ()=>openFinalUpload(e.id)))
+    act.appendChild(mk('🗑', async()=>{ if(!confirm('Supprimer ce sténopé ?'))return; await saveAndSync(allEntries.filter(x=>x.id!==e.id)) }, true))
+    container.appendChild(card)
+  })
+}
+function renderStorageBar() {
+  const sz = new Blob([JSON.stringify(allEntries)]).size
+  document.getElementById('storageBar').textContent =
+    `~${(sz/1024).toFixed(1)} KB${gToken?' · ✓ sync Google Drive':' · local uniquement'}`
+}
+function renderAll() { renderList(); renderMarkers(); renderStorageBar() }
 
-    photoInput.addEventListener('change', async (ev)=>{ const f = ev.target.files && ev.target.files[0]; if(!f) return; try{ const dataUrl = await compressFileToDataURL(f, 1200, 0.75); lastPhotos.push(dataUrl); renderPhotosPreview(); } catch(err){ console.error(err); alert('Erreur lors de la lecture de l\'image') } finally { photoInput.value = '' } })
-    document.getElementById('addPhotoBtn').addEventListener('click', ()=>photoInput.click())
+// ── Photos ────────────────────────────────────────────────
+document.getElementById('addPhotoBtn').addEventListener('click', ()=>document.getElementById('photoInput').click())
+document.getElementById('photoInput').addEventListener('change', async ev => {
+  for (const f of Array.from(ev.target.files||[])) {
+    try { pendingPhotos.push(await compressFile(f,1200,0.75)) } catch(e){console.error(e)}
+  }
+  ev.target.value=''; renderPreviews()
+})
+function renderPreviews() {
+  const p=document.getElementById('photosPreview'); p.innerHTML=''
+  pendingPhotos.forEach((d,i)=>{
+    const h=document.createElement('div'); h.className='photo-thumb'
+    const img=document.createElement('img'); img.src=d
+    const del=document.createElement('button'); del.className='del'; del.textContent='×'
+    del.onclick=()=>{pendingPhotos.splice(i,1);renderPreviews()}
+    h.appendChild(img); h.appendChild(del); p.appendChild(h)
+  })
+}
+function compressFile(file,maxWidth=1200,quality=0.75){
+  return new Promise((resolve,reject)=>{
+    const img=new Image(),fr=new FileReader()
+    fr.onload=()=>{img.onload=()=>{let w=img.width,h=img.height;if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth};const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);resolve(c.toDataURL('image/jpeg',quality))};img.onerror=reject;img.src=fr.result};fr.onerror=reject;fr.readAsDataURL(file)
+  })
+}
+async function openFinalUpload(id){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*'
+  inp.onchange=async ev=>{const f=ev.target.files&&ev.target.files[0];if(!f)return;const d=await compressFile(f,1200,0.75);const i=allEntries.findIndex(x=>x.id===id);if(i!==-1){allEntries[i].finalPhotoDataURL=d;await saveAndSync(allEntries);alert('Photo finale enregistrée')}}
+  inp.click()
+}
 
-    // choose which tab to show
-    document.getElementById('tabMap').addEventListener('click', ()=>{ document.getElementById('sidebar').style.display='none'; document.getElementById('map').style.display='block'; setTimeout(()=>map.invalidateSize(),200); })
-    document.getElementById('tabForm').addEventListener('click', ()=>{ document.getElementById('sidebar').style.display='block'; document.getElementById('map').style.display='block'; setTimeout(()=>map.invalidateSize(),200); })
+// ── Geoloc ────────────────────────────────────────────────
+function startGeoloc(){
+  const el=document.getElementById('geoStatus')
+  if(!navigator.geolocation){el.textContent='📍 Géoloc non supportée';el.className='err';return}
+  el.textContent='📍 Localisation en cours…';el.className=''
+  navigator.geolocation.getCurrentPosition(
+    p=>{currentLoc={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy};el.textContent=`📍 ${currentLoc.lat.toFixed(5)}, ${currentLoc.lng.toFixed(5)} (±${Math.round(currentLoc.accuracy)}m)`;el.className='ok'},
+    err=>{el.textContent=`📍 Erreur: ${err.message}`;el.className='err'},
+    {enableHighAccuracy:true,timeout:15000}
+  )
+}
 
-    // save new entry (big button)
-    document.getElementById('saveBtn').addEventListener('click', async (ev)=>{
-      ev.preventDefault(); if(lastPhotos.length === 0) return alert('Ajoute au moins une photo');
-      const entries = await loadEntries(); const id = Date.now().toString(36)+Math.random().toString(36).slice(2,8);
-      const entry = { id, createdAt: Date.now(), initialPhotoDataURLs: lastPhotos.slice(), location: lastLoc, boxType: document.getElementById('boxType').value, holeDiameter_mm: Number(document.getElementById('hole').value), paperType: document.getElementById('paperType').value, notes: document.getElementById('notes').value, retrievalDate: null, finalPhotoDataURL: null };
-      entries.push(entry); await saveEntries(entries);
-      // reset form
-      lastPhotos = []; renderPhotosPreview(); document.getElementById('notes').value=''; document.getElementById('locInfo').textContent = lastLoc? `${lastLoc.lat.toFixed(5)}, ${lastLoc.lng.toFixed(5)}` : 'Aucune'; await renderList(); await renderMarkers(); alert('Enregistré localement');
-    })
+// ── Save ──────────────────────────────────────────────────
+document.getElementById('saveBtn').addEventListener('click', async()=>{
+  if(pendingPhotos.length===0){alert("Ajoute au moins une photo avant d'enregistrer");return}
+  const id=Date.now().toString(36)+Math.random().toString(36).slice(2,8)
+  const entry={id,createdAt:Date.now(),photos:pendingPhotos.slice(),location:currentLoc,
+    boxType:document.getElementById('boxType').value,
+    holeDiameter_mm:Number(document.getElementById('hole').value),
+    paperType:document.getElementById('paperType').value,
+    notes:document.getElementById('notes').value,
+    retrievalDate:null,finalPhotoDataURL:null}
+  allEntries.push(entry)
+  await saveAndSync(allEntries)
+  pendingPhotos=[];renderPreviews();document.getElementById('notes').value=''
+  alert('Sténopé enregistré !');startGeoloc()
+})
 
-    // geoloc
-    let lastLoc = null; document.getElementById('getLoc').addEventListener('click', ()=>{
-      if(!navigator.geolocation) return alert('Géoloc non supportée');
-      navigator.geolocation.getCurrentPosition(p=>{ lastLoc = {lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}; document.getElementById('locInfo').textContent = `${lastLoc.lat.toFixed(5)}, ${lastLoc.lng.toFixed(5)} (±${Math.round(lastLoc.accuracy)}m)` }, e=>alert('Erreur géoloc: '+e.message), {enableHighAccuracy:true, timeout:10000})
-    })
+// ── Export ────────────────────────────────────────────────
+document.getElementById('exportJson').addEventListener('click',()=>{
+  const b=new Blob([JSON.stringify(allEntries,null,2)],{type:'application/json'})
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='solar_entries.json';a.click()
+})
+document.getElementById('exportKml').addEventListener('click',()=>{
+  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  const parts=['<?xml version="1.0" encoding="UTF-8"?>','<kml xmlns="http://www.opengis.net/kml/2.2"><Document>']
+  allEntries.filter(e=>e.location).forEach(e=>{parts.push(`<Placemark><name>${esc('Sténopé '+new Date(e.createdAt).toLocaleDateString())}</name><description>${esc(e.boxType+' · '+e.holeDiameter_mm+'mm · '+(e.paperType||'')+'\n'+(e.notes||''))}</description><Point><coordinates>${e.location.lng},${e.location.lat},0</coordinates></Point></Placemark>`)})
+  parts.push('</Document></kml>')
+  const b=new Blob([parts.join('\n')],{type:'application/vnd.google-earth.kml+xml'})
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='solar_entries.kml';a.click()
+})
+document.getElementById('clearAll').addEventListener('click',async()=>{
+  if(!confirm('Supprimer TOUS les sténopés ?'))return; await saveAndSync([])
+})
 
-    // save new entry
-    document.getElementById('save').addEventListener('click',async (ev)=>{ ev.preventDefault(); if(!lastDataUrl) return alert('Ajoute une photo'); const entries = await loadEntries(); const id = Date.now().toString(36)+Math.random().toString(36).slice(2,8); const entry = { id, createdAt: Date.now(), initialPhotoDataURL: lastDataUrl, location: lastLoc, boxType: document.getElementById('boxType').value, holeDiameter_mm: Number(document.getElementById('hole').value), paperType: document.getElementById('paperType').value, notes: document.getElementById('notes').value, retrievalDate: null, finalPhotoDataURL: null }; entries.push(entry); await saveEntries(entries); // reset
-      photo.value=''; preview.hidden=true; lastDataUrl=null; document.getElementById('locInfo').textContent = lastLoc? `${lastLoc.lat.toFixed(5)}, ${lastLoc.lng.toFixed(5)}` : 'Aucune'; await renderList(); await renderMarkers(); alert('Enregistré localement'); })
+// ── Tabs ──────────────────────────────────────────────────
+function switchTab(tabId){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId))
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===tabId))
+  if(tabId==='panelMap')setTimeout(()=>map.invalidateSize(),200)
+}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)))
 
-    // export JSON and KML
-    document.getElementById('exportJson').addEventListener('click', async ()=>{ const data = JSON.stringify(await loadEntries(), null, 2); const blob = new Blob([data], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'solar_entries.json'; a.click(); URL.revokeObjectURL(url); })
-
-    document.getElementById('exportKml').addEventListener('click', async ()=>{
-      const entries = (await loadEntries()).filter(e=>e.location)
-      const kmlParts = ['<?xml version="1.0" encoding="UTF-8"?>', '<kml xmlns="http://www.opengis.net/kml/2.2">', '<Document>']
-      entries.forEach(e=>{
-        const name = `Sténopé ${new Date(e.createdAt).toLocaleDateString()}`
-        const desc = `${e.boxType} • ${e.holeDiameter_mm} mm\n${e.notes||''}`
-        kmlParts.push(`<Placemark><name>${escapeXml(name)}</name><description>${escapeXml(desc)}</description><Point><coordinates>${e.location.lng},${e.location.lat},0</coordinates></Point></Placemark>`)
-      })
-      kmlParts.push('</Document></kml>')
-      const blob = new Blob([kmlParts.join('\n')], {type:'application/vnd.google-earth.kml+xml'});
-      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'solar_entries.kml'; a.click(); URL.revokeObjectURL(url);
-    })
-
-    function escapeXml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;') }
-
-    // clear all
-    document.getElementById('clearAll').addEventListener('click', async ()=>{ if(!confirm('Supprimer toutes les données locales ?')) return; await localforage.removeItem(KEY); await renderList(); await renderMarkers(); })
-
-    // map fullscreen toggle
-    const btnMap = document.getElementById('btnMap'); btnMap.addEventListener('click', ()=>{ const side = document.getElementById('sidebar'); if(side.style.display === 'none'){ side.style.display='block'; btnMap.textContent='Ouvrir la carte'; map.invalidateSize(); } else { side.style.display='none'; btnMap.textContent='Retour'; setTimeout(()=>map.invalidateSize(),300); } })
-
-    // init
-    (async ()=>{ await renderList(); await renderMarkers(); })();
-  </script>
+// ── Init ──────────────────────────────────────────────────
+;(async()=>{
+  allEntries=await localLoad()
+  renderAll(); startGeoloc()
+  const waitGsi=setInterval(()=>{
+    if(typeof google!=='undefined'&&google.accounts){clearInterval(waitGsi);initGoogleAuth()}
+  },400)
+  setTimeout(()=>clearInterval(waitGsi),10000)
+})()
+</script>
 </body>
 </html>
