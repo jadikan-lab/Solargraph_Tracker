@@ -194,6 +194,48 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
   max-width:90vw;text-align:center;pointer-events:none;
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── Edit modal (bottom sheet) ── */
+#editOverlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;
+  display:none;
+}
+#editOverlay.open{display:block}
+#editSheet{
+  position:fixed;left:0;right:0;bottom:-100%;
+  max-height:92dvh;background:#fff;z-index:301;
+  border-radius:18px 18px 0 0;
+  display:flex;flex-direction:column;
+  transition:bottom .3s ease;
+  box-shadow:0 -4px 24px rgba(0,0,0,.18);
+}
+#editSheet.open{bottom:0}
+#editSheetHead{
+  background:var(--dark);color:#fff;padding:16px;
+  display:flex;align-items:center;gap:8px;
+  border-radius:18px 18px 0 0;flex-shrink:0;
+}
+#editSheetHead h2{font-size:1rem;flex:1}
+#editSheetClose{background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;padding:4px;line-height:1}
+#editSheetBody{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+#editPhotosPreview{display:flex;flex-wrap:wrap;gap:8px}
+.btn-save-edit{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--blue);color:#fff;border:none;
+  border-radius:var(--radius);padding:16px;font-size:1.05rem;
+  font-weight:700;cursor:pointer;width:100%;min-height:56px;flex-shrink:0;
+  margin-top:4px;
+}
+.btn-save-edit:active{filter:brightness(.9)}
+
+/* ── Map markers ── */
+.map-pin{
+  width:28px;height:28px;border-radius:50%;border:3px solid #fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.35);
+}
+.map-pin.active{background:#e67e22}
+.map-pin.retrieved{background:#27ae60}
+
 </style>
 </head>
 <body>
@@ -263,7 +305,13 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
   <div id="photosPreview"></div>
   <div class="field">
     <label>Type de boîte</label>
-    <select id="boxType"><option>full</option><option>medium</option><option>small</option></select>
+    <select id="boxType">
+      <option>5x7 can</option>
+      <option>large (5x3.5)</option>
+      <option>small (2.5x3.5)</option>
+      <option>mini</option>
+      <option>custom</option>
+    </select>
   </div>
   <div class="field">
     <label>Diamètre trou (mm)</label>
@@ -272,7 +320,7 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
   <div class="field">
     <label>Type de papier</label>
     <select id="paperType">
-      <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option>
+      <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option><option>random</option>
     </select>
   </div>
   <div class="field">
@@ -297,6 +345,45 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
 <!-- Panel Map -->
 <div id="panelMap" class="panel">
   <div id="map"></div>
+</div>
+
+<!-- Edit modal (bottom sheet) -->
+<div id="editOverlay"></div>
+<div id="editSheet">
+  <div id="editSheetHead">
+    <h2>✏️ Modifier le sténopé</h2>
+    <button id="editSheetClose">✕</button>
+  </div>
+  <div id="editSheetBody">
+    <button class="btn-photo" id="editAddPhotoBtn">📷 Ajouter des photos</button>
+    <input id="editPhotoInput" type="file" accept="image/*" style="display:none" multiple>
+    <div id="editPhotosPreview"></div>
+    <div class="field">
+      <label>Type de boîte</label>
+      <select id="editBoxType">
+        <option>5x7 can</option>
+        <option>large (5x3.5)</option>
+        <option>small (2.5x3.5)</option>
+        <option>mini</option>
+        <option>custom</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Diamètre trou (mm)</label>
+      <select id="editHole"><option>0.26</option><option>0.4</option><option>0.5</option></select>
+    </div>
+    <div class="field">
+      <label>Type de papier</label>
+      <select id="editPaperType">
+        <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option><option>random</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="editNotes" placeholder="Orientation, lieu, conditions…"></textarea>
+    </div>
+    <button class="btn-save-edit" id="editSaveBtn">💾 Enregistrer les modifications</button>
+  </div>
 </div>
 
 <!-- Toast -->
@@ -607,12 +694,20 @@ const map = L.map('map').setView([46,2],5)
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map)
 const markerLayer = L.layerGroup().addTo(map)
 
+function makeIcon(retrieved){
+  return L.divIcon({
+    className:'',
+    html:`<div class="map-pin ${retrieved?'retrieved':'active'}"></div>`,
+    iconSize:[28,28],iconAnchor:[14,14],popupAnchor:[0,-16]
+  })
+}
+
 function renderMarkers(){
   markerLayer.clearLayers()
   allEntries.forEach(e=>{
     if(!e.location) return
     const fp = (e.photos&&e.photos[0])||null
-    L.marker([e.location.lat,e.location.lng]).bindPopup(
+    L.marker([e.location.lat,e.location.lng],{icon:makeIcon(!!e.retrievalDate)}).bindPopup(
       `<div style="max-width:260px">
         <strong>${new Date(e.createdAt).toLocaleString()}</strong>
         <div>${e.boxType} · ${e.holeDiameter_mm}mm · ${e.paperType||''}</div>
@@ -651,6 +746,7 @@ function renderList(){
     const act=card.querySelector('.entry-actions')
     const mk=(label,fn,danger)=>{const b=document.createElement('button');b.className='btn-xs'+(danger?' danger':'');b.textContent=label;b.onclick=fn;return b}
     act.appendChild(mk('🗺 Voir',()=>{switchTab('panelMap');if(e.location)setTimeout(()=>map.setView([e.location.lat,e.location.lng],15),300)}))
+    act.appendChild(mk('✏️ Modifier',()=>openEditModal(e.id)))
     act.appendChild(mk(e.retrievalDate?'↩ Annuler récup':'✓ Récupéré',async()=>{const i=allEntries.findIndex(x=>x.id===e.id);if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now();await saveAndSync(allEntries)}}))
     act.appendChild(mk('📷 Photo finale',()=>openFinalUpload(e.id)))
     if(e.myDrivePhotos&&e.myDrivePhotos[0]&&e.myDrivePhotos[0].webViewLink)
@@ -704,6 +800,64 @@ async function openFinalUpload(id){
     if(i!==-1){allEntries[i].finalPhotoDataURL=d;await saveAndSync(allEntries);toast('Photo finale enregistrée ✓')}
   }; inp.click()
 }
+
+// ── Edit modal ────────────────────────────────────────
+let editEntryId = null
+let editPhotos  = []   // copy of photos array being edited
+
+function openEditModal(id){
+  const e = allEntries.find(x=>x.id===id); if(!e) return
+  editEntryId = id
+  editPhotos  = (e.photos||[]).slice()
+
+  // Populate fields
+  const sel = v => o => o.value===String(v)
+  ;[...document.getElementById('editBoxType').options].forEach(o=>o.selected=(o.value===e.boxType))
+  ;[...document.getElementById('editHole').options].forEach(o=>o.selected=(o.value===String(e.holeDiameter_mm)))
+  ;[...document.getElementById('editPaperType').options].forEach(o=>o.selected=(o.value===(e.paperType||'')))
+  document.getElementById('editNotes').value = e.notes||''
+
+  renderEditPreviews()
+  document.getElementById('editOverlay').classList.add('open')
+  document.getElementById('editSheet').classList.add('open')
+}
+function closeEditModal(){
+  document.getElementById('editOverlay').classList.remove('open')
+  document.getElementById('editSheet').classList.remove('open')
+  editEntryId=null; editPhotos=[]
+}
+function renderEditPreviews(){
+  const p=document.getElementById('editPhotosPreview'); p.innerHTML=''
+  editPhotos.forEach((d,i)=>{
+    const h=document.createElement('div'); h.className='photo-thumb'
+    const img=document.createElement('img'); img.src=d
+    const del=document.createElement('button'); del.className='del'; del.textContent='×'
+    del.onclick=()=>{editPhotos.splice(i,1);renderEditPreviews()}
+    h.appendChild(img); h.appendChild(del); p.appendChild(h)
+  })
+}
+document.getElementById('editSheetClose').addEventListener('click',closeEditModal)
+document.getElementById('editOverlay').addEventListener('click',closeEditModal)
+document.getElementById('editAddPhotoBtn').addEventListener('click',()=>document.getElementById('editPhotoInput').click())
+document.getElementById('editPhotoInput').addEventListener('change',async ev=>{
+  for(const f of Array.from(ev.target.files||[])){
+    try{editPhotos.push(await compressFile(f,1200,0.75))}catch(e){console.error(e)}
+  }
+  ev.target.value=''; renderEditPreviews()
+})
+document.getElementById('editSaveBtn').addEventListener('click',async()=>{
+  const i = allEntries.findIndex(x=>x.id===editEntryId); if(i===-1) return
+  allEntries[i].photos       = editPhotos.slice()
+  allEntries[i].boxType      = document.getElementById('editBoxType').value
+  allEntries[i].holeDiameter_mm = Number(document.getElementById('editHole').value)
+  allEntries[i].paperType    = document.getElementById('editPaperType').value
+  allEntries[i].notes        = document.getElementById('editNotes').value
+  // If photos changed, clear Drive links for this entry so they re-upload
+  delete allEntries[i].myDrivePhotos
+  closeEditModal()
+  await saveAndSync(allEntries)
+  toast('Modifications enregistrées ✓')
+})
 
 // ── Geoloc ────────────────────────────────────────────
 function startGeoloc(){
