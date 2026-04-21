@@ -6,7 +6,13 @@
 <title>Solargraph Tracker</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// Callback officiel Google GSI — déclenché dès que le SDK est prêt
+window.onGoogleLibraryLoad = function(){
+  if(typeof initGoogleAuth === 'function') initGoogleAuth()
+}
+</script>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <style>
 :root{
   --blue:#0366d6;--green:#28a745;--red:#dc3545;--dark:#1a1a2e;
@@ -240,7 +246,6 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
 .map-pin.retrieved{background:#e67e22} /* orange = retrieved */
 
 /* map legend */
-/* map legend */
 #mapLegend{
   position:absolute;top:10px;right:10px;z-index:520;background:rgba(255,255,255,0.95);
   padding:8px 10px;border-radius:10px;border:1px solid var(--border);font-size:0.85rem;color:#333;
@@ -249,7 +254,6 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
 .mapLegendItem{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .mapLegendSwatch{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:6px}
 
-/* ensure legend positioned relative to panel */
 /* ensure legend positioned relative to panel */
 #panelMap{position:relative}
 
@@ -1063,12 +1067,14 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>swit
 
 // ── Init ──────────────────────────────────────────────
 ;(async()=>{
-  allEntries=await localLoad()
-  renderAll(); startGeoloc()
-  const waitGsi=setInterval(()=>{
-    if(typeof google!=='undefined'&&google.accounts){clearInterval(waitGsi);initGoogleAuth()}
-  },400)
-  setTimeout(()=>clearInterval(waitGsi),10000)
+  startGeoloc()                    // démarre immédiatement, sans attendre l'IDB
+  allEntries = await localLoad()
+  renderAll()
+  // fallback polling si onGoogleLibraryLoad ne se déclenche pas (rare)
+  const waitGsi = setInterval(()=>{
+    if(typeof google !== 'undefined' && google.accounts){ clearInterval(waitGsi); initGoogleAuth() }
+  }, 400)
+  setTimeout(()=>clearInterval(waitGsi), 15000)
 })()
 </script>
 </body>
