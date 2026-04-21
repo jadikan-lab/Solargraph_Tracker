@@ -359,7 +359,7 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
       <input id="orientationDegree" type="number" placeholder="°" min="0" max="360" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);display:none">
     </div>
   </div>
-  <div id="geoStatus">📍 Géoloc en attente…</div>
+  <div id="geoStatus" onclick="startGeoloc()" style="cursor:pointer" title="Tap pour relancer">📍 Géoloc en attente…</div>
   <button class="btn-save" id="saveBtn">💾 Enregistrer le sténopé</button>
 </div>
 
@@ -367,9 +367,9 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
 <div id="panelList" class="panel">
   <div id="listControls" style="display:flex;gap:8px;align-items:center;padding:8px 0 6px">
     <div style="display:flex;gap:6px">
-      <button class="btn-out" id="filterAll">Tous</button>
-      <button class="btn-out" id="filterOpen">En cours</button>
-      <button class="btn-out" id="filterRetrieved">Récupérés</button>
+      <button class="btn-out filter-btn" data-filter="all" id="filterAll">Tous</button>
+      <button class="btn-out filter-btn" data-filter="open" id="filterOpen">En cours</button>
+      <button class="btn-out filter-btn" data-filter="retrieved" id="filterRetrieved">Récupérés</button>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
       <label style="font-size:0.85rem;color:#666">Trier:</label>
@@ -978,13 +978,26 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
 
 // ── Geoloc ────────────────────────────────────────────
 function startGeoloc(){
-  const el=document.getElementById('geoStatus')
-  if(!navigator.geolocation){el.textContent='📍 Géoloc non supportée';el.className='err';return}
-  el.textContent='📍 Localisation…';el.className=''
+  const el = document.getElementById('geoStatus')
+  if(!el) return
+  if(!navigator.geolocation){
+    el.textContent='📍 Géolocalisation non supportée'; el.className='err'; return
+  }
+  el.textContent='📍 Localisation en cours…'; el.className=''
   navigator.geolocation.getCurrentPosition(
-    p=>{currentLoc={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy};el.textContent=`📍 ${currentLoc.lat.toFixed(5)}, ${currentLoc.lng.toFixed(5)} (±${Math.round(currentLoc.accuracy)}m)`;el.className='ok'},
-    err=>{el.textContent=`📍 ${err.message}`;el.className='err'},
-    {enableHighAccuracy:true,timeout:15000}
+    p=>{
+      currentLoc={lat:p.coords.latitude, lng:p.coords.longitude, accuracy:p.coords.accuracy}
+      el.textContent=`📍 ${currentLoc.lat.toFixed(5)}, ${currentLoc.lng.toFixed(5)} (±${Math.round(currentLoc.accuracy)}m)`
+      el.className='ok'
+    },
+    err=>{
+      const msgs={1:'Permission refusée', 2:'Position indisponible', 3:'Délai dépassé'}
+      el.textContent=`📍 Erreur : ${msgs[err.code]||err.message}`
+      el.className='err'
+      // retry once after 3s for timeout/unavailable
+      if(err.code!==1) setTimeout(startGeoloc, 3000)
+    },
+    {enableHighAccuracy:true, timeout:20000, maximumAge:60000}
   )
 }
 
@@ -1036,34 +1049,44 @@ function switchTab(tabId){
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)))
 
-// ── UI bindings: orientation inputs, filters, sorting
-(function(){
-  const oSel = document.getElementById('orientationSelect')
-  const oDeg = document.getElementById('orientationDegree')
-  if(oSel && oDeg){ oSel.addEventListener('change', function(){ if(this.value==='libre'){ oDeg.style.display='block' } else { oDeg.style.display='none'; oDeg.value='' } }) }
-  const eSel = document.getElementById('editOrientationSelect')
-  const eDeg = document.getElementById('editOrientationDegree')
-  if(eSel && eDeg){ eSel.addEventListener('change', function(){ if(this.value==='libre'){ eDeg.style.display='block' } else { eDeg.style.display='none'; eDeg.value='' } }) }
+// ── UI bindings: orientation inputs, filters, sorting ─
+// Orientation show/hide degree input
+const _oSel = document.getElementById('orientationSelect')
+const _oDeg = document.getElementById('orientationDegree')
+if(_oSel && _oDeg){
+  _oSel.addEventListener('change', function(){
+    _oDeg.style.display = this.value==='libre' ? 'block' : 'none'
+    if(this.value!=='libre') _oDeg.value=''
+  })
+}
+const _eSel = document.getElementById('editOrientationSelect')
+const _eDeg = document.getElementById('editOrientationDegree')
+if(_eSel && _eDeg){
+  _eSel.addEventListener('change', function(){
+    _eDeg.style.display = this.value==='libre' ? 'block' : 'none'
+    if(this.value!=='libre') _eDeg.value=''
+  })
+}
 
-  // filters
-  const btnAll = document.getElementById('filterAll'), btnOpen=document.getElementById('filterOpen'), btnRet=document.getElementById('filterRetrieved')
-  const setFilter = f=>{
-    currentFilter=f
-    [btnAll,btnOpen,btnRet].forEach(b=>b.classList.toggle('filter-active', false))
-    if(f==='all') btnAll.classList.add('filter-active')
-    if(f==='open') btnOpen.classList.add('filter-active')
-    if(f==='retrieved') btnRet.classList.add('filter-active')
-    renderAll()
-  }
-  if(btnAll) btnAll.addEventListener('click',()=>setFilter('all'))
-  if(btnOpen) btnOpen.addEventListener('click',()=>setFilter('open'))
-  if(btnRet) btnRet.addEventListener('click',()=>setFilter('retrieved'))
-  // sort
-  const sortSel = document.getElementById('sortSelect')
-  if(sortSel) sortSel.addEventListener('change',()=>{ currentSort = sortSel.value; renderAll() })
-  // default
-  setFilter('all')
-})()
+// Filters & sort
+function setFilter(f){
+  currentFilter = f
+  document.querySelectorAll('#listControls .filter-btn').forEach(b=>{
+    b.classList.toggle('filter-active', b.dataset.filter===f)
+  })
+  renderList()  // only re-render list, not the full page
+}
+function setSort(s){
+  currentSort = s
+  renderList()
+}
+document.querySelectorAll('#listControls .filter-btn').forEach(b=>{
+  b.addEventListener('click', ()=>setFilter(b.dataset.filter))
+})
+const _sortSel = document.getElementById('sortSelect')
+if(_sortSel) _sortSel.addEventListener('change', ()=>setSort(_sortSel.value))
+// set default visual state immediately (no renderAll call here — async init will render)
+setFilter('all')
 
 // ── Init ──────────────────────────────────────────────
 ;(async()=>{
