@@ -7,6 +7,10 @@ function days(e, end = Date.now()) {
   return Math.max(0, Math.floor((end - (e.createdAt || Date.now())) / 86400000))
 }
 
+function mainPhoto(e) {
+  return e.initialPhotoDataURL || e.photos?.[0] || null
+}
+
 export default function Detail({ entry, onBack, onUpdate, onDelete }) {
   const [step, setStep] = useState(0) // 0 detail, 1-3 récupérer
   const [photo, setPhoto] = useState(null)
@@ -26,6 +30,7 @@ export default function Detail({ entry, onBack, onUpdate, onDelete }) {
 function DetailView({ entry, onBack, onUpdate, onDelete, onRecuperer }) {
   const status = entry.retrievalDate ? 'recupere' : 'enplace'
   const dur = days(entry, entry.retrievalDate || Date.now())
+  const photo = mainPhoto(entry)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '8px 16px 0' }}>
@@ -34,8 +39,8 @@ function DetailView({ entry, onBack, onUpdate, onDelete, onRecuperer }) {
           <Btn kind="ghost" size="sm" icon={<IconMore size={18}/>}> </Btn>
         </div>
         <div style={{ position: 'relative' }}>
-          {entry.initialPhotoDataURL
-            ? <img src={entry.initialPhotoDataURL} alt="" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 14, border: '1px solid var(--papier-edge)' }}/>
+          {photo
+            ? <img src={photo} alt="" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 14, border: '1px solid var(--papier-edge)' }}/>
             : <div className="photo-ph" style={{ aspectRatio: '16/10' }}>photo principale</div>}
           <div style={{ position: 'absolute', left: 12, bottom: 12 }}>
             <StatusPill status={status} size="lg"/>
@@ -107,13 +112,14 @@ function StepHeader({ step, total = 3, title }) {
 }
 
 function Step1({ entry, onBack, onNext }) {
+  const photo = mainPhoto(entry)
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <StepHeader step={1} title="1. Confirmer le sténopé"/>
       <Card>
         <div style={{ display: 'flex', gap: 12 }}>
-          {entry.initialPhotoDataURL
-            ? <img src={entry.initialPhotoDataURL} alt="" style={{ width: 84, height: 84, borderRadius: 8, objectFit: 'cover', flex: 'none' }}/>
+          {photo
+            ? <img src={photo} alt="" style={{ width: 84, height: 84, borderRadius: 8, objectFit: 'cover', flex: 'none' }}/>
             : <div className="photo-ph" style={{ width: 84, height: 84, flex: 'none' }}/>}
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontWeight: 500, fontSize: 18 }}>{entry.name || 'Sans nom'}</div>

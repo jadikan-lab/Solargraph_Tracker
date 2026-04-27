@@ -61,7 +61,7 @@ export default function App() {
 
     setEntries(nextEntries)
     if (successMessage) {
-      const suffix = isPreview && driveState.authenticated ? ' · Drive preview synchro' : ' · local seulement'
+      const suffix = isPreview && driveState.authenticated ? ' · Drive partagé synchro' : ' · synchro non active'
       setToast({ kind: 'success', msg: successMessage + suffix })
     }
     return nextEntries
@@ -126,7 +126,7 @@ export default function App() {
     <>
       {/* Mobile shell */}
       <div className="app-shell mobile-only">
-        {isPreview && <div className="banner-preview">Preview redesign isolee · stockage local separe</div>}
+        {isPreview && <div className="banner-preview">Preview redesign partagee · memes donnees que la version classique</div>}
         {!online && <div className="banner-offline">Hors ligne — les modifs sont conservées en local</div>}
         {tab === 'ajouter'  && <div className="screen"><AddForm onAdd={onAdd} onDone={() => setTab('liste')}/></div>}
         {tab === 'liste'    && <Liste entries={entries} onSelect={setSelected}/>}
@@ -141,7 +141,7 @@ export default function App() {
         <aside className="nav">
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontWeight: 500, fontSize: 22 }}>Solargraph</div>
-            <div className="cap" style={{ marginTop: 4 }}>{isPreview ? 'preview redesign · consultation' : 'tracker · consultation'}</div>
+            <div className="cap" style={{ marginTop: 4 }}>{isPreview ? 'preview redesign · donnees partagees' : 'tracker · consultation'}</div>
           </div>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {[{ id: 'liste', l: 'Liste' }, { id: 'carte', l: 'Carte' }, { id: 'reglages', l: 'Réglages' }].map((it) => (
@@ -172,7 +172,7 @@ export default function App() {
         <aside className="right">
           <Liste entries={entries} onSelect={setSelected}/>
         </aside>
-        {isPreview && <div className="banner-preview desktop-preview">Preview redesign isolee · stockage local separe</div>}
+        {isPreview && <div className="banner-preview desktop-preview">Preview redesign partagee · memes donnees que la version classique</div>}
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
       </div>
     </>

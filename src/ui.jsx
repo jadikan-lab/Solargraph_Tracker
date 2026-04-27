@@ -146,7 +146,6 @@ export function TabBar({ active, onTab, onAdd }) {
   )
   return (
     <nav className="tabbar">
-      {tab('ajouter', <IconPlus size={20}/>, 'Ajouter')}
       {tab('liste',   <IconList size={20}/>, 'Liste')}
       <div className="fab-slot">
         <button className="fab" onClick={() => (onAdd || onTab)?.('ajouter')} aria-label="Ajouter un sténopé">

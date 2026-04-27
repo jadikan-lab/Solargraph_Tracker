@@ -12,6 +12,10 @@ function makeIcon(status) {
   return L.divIcon({ html, className: 'sg-marker', iconSize: [30, 38], iconAnchor: [15, 38], popupAnchor: [0, -34] })
 }
 
+function mainPhoto(e) {
+  return e.initialPhotoDataURL || e.photos?.[0] || null
+}
+
 export default function MapView({ entries, onSelect, embed = false }) {
   const mapRef = useRef(null)
   const layerRef = useRef(null)
@@ -34,12 +38,13 @@ export default function MapView({ entries, onSelect, embed = false }) {
     const valid = entries.filter((e) => e.location?.lat && e.location?.lng)
     valid.forEach((e) => {
       const status = e.retrievalDate ? 'recupere' : 'enplace'
+      const photo = mainPhoto(e)
       const marker = L.marker([e.location.lat, e.location.lng], { icon: makeIcon(status) })
       const popup = L.popup({ maxWidth: 260 }).setContent(
         `<div class="popup">
           <div class="name">${e.name || 'Sans nom'}</div>
           <div style="font-size:12px;color:#6b6253;margin-top:4px;">${e.boxType || '—'} · Ø${e.holeDiameter_mm} mm</div>
-          ${e.initialPhotoDataURL ? `<img src="${e.initialPhotoDataURL}" style="max-width:240px;max-height:140px;display:block;margin-top:8px;"/>` : ''}
+          ${photo ? `<img src="${photo}" style="max-width:240px;max-height:140px;display:block;margin-top:8px;"/>` : ''}
         </div>`
       )
       marker.bindPopup(popup)

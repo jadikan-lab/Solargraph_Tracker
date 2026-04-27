@@ -11,6 +11,10 @@ function days(e) {
   return Math.max(0, Math.floor((t - (e.createdAt || Date.now())) / 86400000))
 }
 
+function mainPhoto(e) {
+  return e.initialPhotoDataURL || e.photos?.[0] || null
+}
+
 export default function Liste({ entries, onSelect }) {
   const [filter, setFilter] = useState('tous')
   const enplace = entries.filter((e) => !e.retrievalDate).length
@@ -45,8 +49,8 @@ export default function Liste({ entries, onSelect }) {
             return (
               <div key={e.id} className={'thumb ' + (status === 'recupere' ? 'retrieved' : '')} onClick={() => onSelect?.(e)} style={{ cursor: 'pointer' }}>
                 <div style={{ position: 'relative' }}>
-                  {e.initialPhotoDataURL
-                    ? <img src={e.initialPhotoDataURL} alt="" className="thumb-img"/>
+                  {mainPhoto(e)
+                    ? <img src={mainPhoto(e)} alt="" className="thumb-img"/>
                     : <div className="thumb-img ph"/>}
                   <span className={'thumb-status ' + status}/>
                 </div>

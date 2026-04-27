@@ -62,10 +62,11 @@ export default function Carte({ entries, onSelect }) {
 function RowItem({ e, onSelect }) {
   const status = e.retrievalDate ? 'recupere' : 'enplace'
   const days = Math.floor(((e.retrievalDate || Date.now()) - (e.createdAt || Date.now())) / 86400000)
+  const photo = e.initialPhotoDataURL || e.photos?.[0] || null
   return (
     <div className={'list-row ' + (status === 'recupere' ? 'retrieved' : '')} onClick={() => onSelect?.(e)} style={{ cursor: 'pointer' }}>
-      {e.initialPhotoDataURL
-        ? <img src={e.initialPhotoDataURL} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flex: 'none' }}/>
+      {photo
+        ? <img src={photo} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flex: 'none' }}/>
         : <div className="photo-ph" style={{ width: 44, height: 44, flex: 'none' }}/>}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="name">{e.name || 'Sans nom'}</div>

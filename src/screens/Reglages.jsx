@@ -1,15 +1,52 @@
 import React from 'react'
 import { ScreenTitle, StatusHero, Card, Chip, Btn, IconArrowR, IconPlus, IconEdit } from '../ui.jsx'
 
-function ListEditor({ title, items }) {
+const DEFAULT_BOX_TYPES = ['5x7 can', 'large (5x3.5)', 'small (2.5x3.5)', 'mini', 'custom']
+const DEFAULT_HOLES = ['0.26', '0.4', '0.5']
+const DEFAULT_PAPERS = ['Fomaspeed 311', 'RA4 Fujichristal', 'Ilford RC', 'Ilford FB', 'random']
+
+function readList(key, fallback) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+    return Array.isArray(parsed) && parsed.length ? parsed : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeList(key, values) {
+  try {
+    localStorage.setItem(key, JSON.stringify(values))
+  } catch {
+    // Ignore localStorage write errors.
+  }
+}
+
+function ListEditor({ title, items, placeholder, onChange }) {
+  const [draft, setDraft] = React.useState('')
+
+  const addItem = () => {
+    const next = draft.trim()
+    if (!next || items.includes(next)) return
+    onChange([...items, next])
+    setDraft('')
+  }
+
+  const removeAt = (index) => onChange(items.filter((_, i) => i !== index))
+
   return (
     <Card flat>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 8px' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>{title}</div>
-        <button style={{ width: 30, height: 30, borderRadius: 999, border: '1px solid var(--papier-edge)', background: 'var(--papier-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconPlus size={14}/></button>
+        <button onClick={addItem} style={{ width: 30, height: 30, borderRadius: 999, border: '1px solid var(--papier-edge)', background: 'var(--papier-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconPlus size={14}/></button>
+      </div>
+      <div style={{ padding: '0 14px 10px', display: 'flex', gap: 8 }}>
+        <input className="input" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder}
+               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem() } }}/>
+        <Btn kind="paper" size="sm" onClick={addItem}>Ajouter</Btn>
       </div>
       <div style={{ padding: '0 14px 14px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {items.map((it, i) => <Chip key={i} icon={<IconEdit size={11}/>}>{it}</Chip>)}
+        {items.map((it, i) => <Chip key={i} icon={<IconEdit size={11}/>} onRemove={() => removeAt(i)}>{it}</Chip>)}
       </div>
     </Card>
   )
@@ -30,6 +67,24 @@ export default function Reglages({
   onDisconnectDrive,
   onSyncNow,
 }) {
+  const [boxItems, setBoxItems] = React.useState(() => readList('solar_box_types', DEFAULT_BOX_TYPES))
+  const [holeItems, setHoleItems] = React.useState(() => readList('solar_holes', DEFAULT_HOLES))
+  const [paperItems, setPaperItems] = React.useState(() => readList('solar_papers', DEFAULT_PAPERS))
+
+  React.useEffect(() => {
+    const onStorage = () => {
+      setBoxItems(readList('solar_box_types', DEFAULT_BOX_TYPES))
+      setHoleItems(readList('solar_holes', DEFAULT_HOLES))
+      setPaperItems(readList('solar_papers', DEFAULT_PAPERS))
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  const updateBoxes = (next) => { setBoxItems(next); writeList('solar_box_types', next) }
+  const updateHoles = (next) => { setHoleItems(next); writeList('solar_holes', next) }
+  const updatePapers = (next) => { setPaperItems(next); writeList('solar_papers', next) }
+
   const heroState = !navigator.onLine
     ? 'offline'
     : driveState.syncing
@@ -44,13 +99,13 @@ export default function Reglages({
       {isPreview && (
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>Mode preview isole</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>Mode preview partage</div>
             <div style={{ fontSize: 12.5, color: 'var(--encre-mute)', lineHeight: 1.45 }}>
-              Cette version garde ses donnees locales a part pour tester le redesign sans toucher a l'app actuelle.
+              Cette version lit et ecrit sur la meme base de donnees que la version classique.
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <Chip muted>storage: {runtime.storageName || 'solargraph-tracker-preview'}</Chip>
-              <Chip muted>drive: {runtime.driveFileName || 'solargraph_entries_preview.json'}</Chip>
+              <Chip muted>storage: {runtime.storageName || 'solargraph_trk'}</Chip>
+              <Chip muted>drive: {runtime.driveFileName || 'solargraph_entries.json'}</Chip>
             </div>
           </div>
         </Card>
@@ -82,14 +137,14 @@ export default function Reglages({
               <Btn kind="ghost" size="sm" onClick={onDisconnectDrive} disabled={!driveState.authenticated}>Déconnecter</Btn>
             </div>
             <div style={{ fontSize: 12, color: 'var(--encre-mute)', lineHeight: 1.45 }}>
-              Le fichier caché Drive utilisé par cette preview est séparé de la version principale.
+              Le fichier cache Drive et les listes de valeurs sont partages avec la version classique.
             </div>
           </div>
         </Card>
       )}
-      <ListEditor title="Boîtes" items={['Café 250g', 'Conserve', 'Alu', 'Boîte film']}/>
-      <ListEditor title="Diamètres" items={['0.2 mm', '0.26 mm', '0.3 mm', '0.4 mm', '0.5 mm']}/>
-      <ListEditor title="Papiers" items={['Ilford MGIV', 'Foma 132']}/>
+      <ListEditor title="Boîtes" items={boxItems} placeholder="Ajouter un type de boîte" onChange={updateBoxes}/>
+      <ListEditor title="Diamètres" items={holeItems} placeholder="Ajouter un diamètre" onChange={updateHoles}/>
+      <ListEditor title="Papiers" items={paperItems} placeholder="Ajouter un type de papier" onChange={updatePapers}/>
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
