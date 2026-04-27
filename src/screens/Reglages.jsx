@@ -66,6 +66,7 @@ export default function Reglages({
   onConnectDrive,
   onDisconnectDrive,
   onSyncNow,
+  onPublishDrive,
   onExportCsv,
   exportStats = {},
 }) {
@@ -139,11 +140,26 @@ export default function Reglages({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               <Btn kind="primary" size="sm" onClick={onConnectDrive}>Choisir le compte</Btn>
               <Btn kind="paper" size="sm" onClick={onSyncNow} disabled={!driveState.authenticated || driveState.syncing}>Synchroniser</Btn>
+              <Btn kind="success" size="sm" onClick={onPublishDrive} disabled={!driveState.authenticated || driveState.publishing}>
+                {driveState.publishing ? 'Publication…' : 'Publier sur Mon Drive'}
+              </Btn>
               <Btn kind="secondary" size="sm" onClick={onConnectDrive}>Changer de compte</Btn>
               <Btn kind="ghost" size="sm" onClick={onDisconnectDrive} disabled={!driveState.authenticated}>Déconnecter</Btn>
             </div>
+            {driveState.publishFolderLink && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <a href={driveState.publishFolderLink} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--encre)', textDecoration: 'underline' }}>
+                  Ouvrir dossier Solargraph_Tracker
+                </a>
+                {driveState.lastPublishAt && (
+                  <span style={{ fontSize: 12.5, color: 'var(--encre-mute)' }}>
+                    publié le {new Date(driveState.lastPublishAt).toLocaleString('fr-FR')}
+                  </span>
+                )}
+              </div>
+            )}
             <div style={{ fontSize: 12, color: 'var(--encre-mute)', lineHeight: 1.45 }}>
-              Le fichier cache Drive et les listes de valeurs sont partages avec la version classique.
+              Le fichier cache Drive reste la source de sync. Le bouton de publication crée aussi un dossier visible dans Mon Drive avec photos + JSON + CSV + Sheet.
             </div>
           </div>
         </Card>

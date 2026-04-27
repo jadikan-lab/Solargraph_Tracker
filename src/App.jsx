@@ -12,6 +12,7 @@ import {
   disconnectPreviewDrive,
   getPreviewDriveState,
   initPreviewDrive,
+  publishPreviewToMyDrive,
   subscribePreviewDrive,
   syncPreviewEntries,
 } from './previewDrive'
@@ -215,6 +216,15 @@ export default function App() {
     }
   }
 
+  const handlePreviewPublish = async () => {
+    try {
+      const result = await publishPreviewToMyDrive(await db.getEntries())
+      setToast({ kind: 'success', msg: `Publication Drive visible ok · ${result.entries} entrées · ${result.photos} photos` })
+    } catch (error) {
+      setToast({ kind: 'error', msg: `Publication Drive visible impossible: ${error.message}` })
+    }
+  }
+
   if (selected) {
     return (
       <div className="app-shell">
@@ -234,7 +244,7 @@ export default function App() {
         {tab === 'ajouter'  && <div className="screen"><AddForm onAdd={onAdd} onDone={() => setTab('liste')}/></div>}
         {tab === 'liste'    && <Liste entries={visibleEntries} onSelect={setSelected}/>} 
         {tab === 'carte'    && <Carte entries={visibleEntries} onSelect={setSelected}/>} 
-        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow} onExportCsv={handleExportCsv} exportStats={{ entriesCount: visibleEntries.length, archiveCount: csvArchiveCount, lastExportAt: csvLastExportAt }}/>} 
+        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow} onPublishDrive={handlePreviewPublish} onExportCsv={handleExportCsv} exportStats={{ entriesCount: visibleEntries.length, archiveCount: csvArchiveCount, lastExportAt: csvLastExportAt }}/>} 
         <TabBar active={tab} onTab={setTab}/>
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
       </div>

@@ -1,5 +1,5 @@
 const GOOGLE_CLIENT_ID = '724133061731-g3lmkdkm84ejd2utads9a0i2sj63m1j9.apps.googleusercontent.com'
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile'
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile'
 
 const runtime = window.__SG_RUNTIME__ || {}
 const modeKey = runtime.mode || 'default'
@@ -18,10 +18,14 @@ const state = {
   ready: false,
   authenticated: false,
   syncing: false,
+  publishing: false,
   email: '',
   name: '',
   error: '',
   lastSyncAt: readNumber(lastSyncKey),
+  lastPublishAt: null,
+  publishFolderId: '',
+  publishFolderLink: '',
   driveFileName,
 }
 
@@ -193,6 +197,195 @@ async function driveWrite(entries) {
   setState({ lastSyncAt: now, error: '' })
 }
 
+function sanitize(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_\-.]/g, '')
+}
+
+function entryFilename(entry, index, isFinal = false) {
+  const date = new Date(entry.createdAt || Date.now())
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const suffix = isFinal ? 'final' : String(index)
+  return `${yyyy}-${mm}-${dd}_${sanitize(entry.boxType)}_${sanitize(entry.paperType)}_${sanitize(entry.holeDiameter_mm)}_${suffix}.jpg`
+}
+
+function entryFolderName(entry, index) {
+  const date = new Date(entry.createdAt || Date.now())
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const seq = String(index + 1).padStart(3, '0')
+  return `${yyyy}-${mm}-${dd}_${seq}_${sanitize(entry.boxType)}_${sanitize(entry.paperType)}`
+}
+
+function toDataUrlBlob(dataUrl) {
+  const [prefix, base64] = String(dataUrl || '').split(',')
+  const mime = /data:(.*?);base64/.exec(prefix || '')?.[1] || 'application/octet-stream'
+  const binary = atob(base64 || '')
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: mime })
+}
+
+function csvEscape(value) {
+  const text = String(value ?? '').replace(/\r?\n/g, ' ')
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function toCsv(entries) {
+  const header = [
+    'id', 'nom', 'statut', 'date_pose', 'date_recuperation', 'jours_exposition',
+    'boite', 'diametre_mm', 'papier', 'orientation', 'latitude', 'longitude', 'precision_gps_m',
+    'notes_pose', 'note_recuperation'
+  ]
+  const rows = entries.map((entry) => {
+    const retrievalDate = entry.retrievalDate || null
+    const end = retrievalDate || Date.now()
+    const days = Math.max(0, Math.floor((end - (entry.createdAt || Date.now())) / 86400000))
+    return [
+      entry.id || '',
+      entry.name || '',
+      retrievalDate ? 'recupere' : 'en_place',
+      entry.createdAt ? new Date(entry.createdAt).toLocaleString('fr-FR') : '',
+      retrievalDate ? new Date(retrievalDate).toLocaleString('fr-FR') : '',
+      String(days),
+      entry.boxType || '',
+      entry.holeDiameter_mm ?? '',
+      entry.paperType || '',
+      entry.orientation || '',
+      entry.location?.lat ?? '',
+      entry.location?.lng ?? '',
+      entry.location?.accuracy ?? '',
+      entry.notes || '',
+      entry.retrievalNote || '',
+    ]
+  })
+  return [header, ...rows].map((row) => row.map(csvEscape).join(',')).join('\n')
+}
+
+async function driveRequestJson(url, init = {}) {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(init.headers || {}),
+    },
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`Drive API ${response.status}: ${text || 'Erreur inconnue'}`)
+  }
+  if (response.status === 204) return {}
+  return response.json()
+}
+
+async function driveFindFolder(name, parentId = 'root') {
+  const query = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`)
+  const payload = await driveRequestJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`) 
+  return payload.files?.[0]?.id || null
+}
+
+async function driveCreateFolder(name, parentId = 'root') {
+  const payload = await driveRequestJson('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }),
+  })
+  return payload.id || null
+}
+
+async function driveFindFileInFolder(folderId, fileName, mimeType) {
+  let raw = `name='${fileName}' and '${folderId}' in parents and trashed=false`
+  if (mimeType) raw += ` and mimeType='${mimeType}'`
+  const query = encodeURIComponent(raw)
+  const payload = await driveRequestJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType,webViewLink)`) 
+  return payload.files?.[0] || null
+}
+
+async function uploadJsonToFolder(folderId, fileName, payload) {
+  const existing = await driveFindFileInFolder(folderId, fileName)
+  const content = JSON.stringify(payload)
+  if (existing?.id) {
+    await driveRequestJson(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: content,
+    })
+    return existing.id
+  }
+
+  const form = new FormData()
+  form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }))
+  form.append('file', new Blob([content], { type: 'application/json' }), fileName)
+  const created = await driveRequestJson('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    body: form,
+  })
+  return created.id || null
+}
+
+async function uploadCsvToFolder(folderId, fileName, csvContent) {
+  const existing = await driveFindFileInFolder(folderId, fileName)
+  if (existing?.id) {
+    await driveRequestJson(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'text/csv;charset=utf-8' },
+      body: csvContent,
+    })
+    return existing.id
+  }
+
+  const form = new FormData()
+  form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }))
+  form.append('file', new Blob([csvContent], { type: 'text/csv;charset=utf-8' }), fileName)
+  const created = await driveRequestJson('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    body: form,
+  })
+  return created.id || null
+}
+
+async function uploadCsvAsSheet(folderId, sheetName, csvContent) {
+  const existing = await driveFindFileInFolder(folderId, sheetName, 'application/vnd.google-apps.spreadsheet')
+  if (existing?.id) {
+    // Recreate to replace content reliably without extra Sheets API complexity.
+    await driveRequestJson(`https://www.googleapis.com/drive/v3/files/${existing.id}`, { method: 'DELETE' })
+  }
+
+  const metadata = {
+    name: sheetName,
+    parents: [folderId],
+    mimeType: 'application/vnd.google-apps.spreadsheet',
+  }
+  const form = new FormData()
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
+  form.append('file', new Blob([csvContent], { type: 'text/csv;charset=utf-8' }), `${sheetName}.csv`)
+  const created = await driveRequestJson('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+    method: 'POST',
+    body: form,
+  })
+  return created
+}
+
+async function uploadImageToFolder(folderId, fileName, dataUrl) {
+  const existing = await driveFindFileInFolder(folderId, fileName)
+  if (existing?.id) return existing
+
+  const blob = toDataUrlBlob(dataUrl)
+  const form = new FormData()
+  form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }))
+  form.append('file', blob, fileName)
+  return driveRequestJson('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+    method: 'POST',
+    body: form,
+  })
+}
+
 function entryModifiedAt(entry) {
   return Number(entry?.updatedAt || entry?.retrievalDate || entry?.createdAt || 0)
 }
@@ -282,5 +475,65 @@ export async function syncPreviewEntries(localEntries) {
     throw error
   } finally {
     setState({ syncing: false })
+  }
+}
+
+export async function publishPreviewToMyDrive(entries) {
+  if (!accessToken) throw new Error('Compte Google non connecté.')
+
+  setState({ publishing: true, error: '' })
+  try {
+    const visibleEntries = (entries || []).filter((entry) => !entry?.deletedAt)
+    let mainFolderId = await driveFindFolder('Solargraph_Tracker')
+    if (!mainFolderId) mainFolderId = await driveCreateFolder('Solargraph_Tracker')
+    if (!mainFolderId) throw new Error('Impossible de créer le dossier Solargraph_Tracker.')
+
+    const sorted = [...visibleEntries].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+    const indexById = new Map(sorted.map((entry, index) => [entry.id, index]))
+
+    let uploadedPhotos = 0
+    for (const entry of sorted) {
+      const folderName = entryFolderName(entry, indexById.get(entry.id) || 0)
+      let entryFolderId = await driveFindFolder(folderName, mainFolderId)
+      if (!entryFolderId) entryFolderId = await driveCreateFolder(folderName, mainFolderId)
+      if (!entryFolderId) continue
+
+      const photos = Array.isArray(entry.photos) ? entry.photos : []
+      for (let i = 0; i < photos.length; i++) {
+        if (!photos[i]) continue
+        await uploadImageToFolder(entryFolderId, entryFilename(entry, i, false), photos[i])
+        uploadedPhotos += 1
+      }
+
+      if (entry.finalPhotoDataURL) {
+        await uploadImageToFolder(entryFolderId, entryFilename(entry, -1, true), entry.finalPhotoDataURL)
+        uploadedPhotos += 1
+      }
+    }
+
+    await uploadJsonToFolder(mainFolderId, 'solargraph_entries_latest.json', visibleEntries)
+    const csvContent = toCsv(visibleEntries)
+    await uploadCsvToFolder(mainFolderId, 'solargraph_entries_latest.csv', csvContent)
+    const sheet = await uploadCsvAsSheet(mainFolderId, 'solargraph_entries_latest_sheet', csvContent)
+
+    const now = Date.now()
+    setState({
+      publishing: false,
+      lastPublishAt: now,
+      publishFolderId: mainFolderId,
+      publishFolderLink: `https://drive.google.com/drive/folders/${mainFolderId}`,
+      error: '',
+    })
+
+    return {
+      folderId: mainFolderId,
+      folderLink: `https://drive.google.com/drive/folders/${mainFolderId}`,
+      sheetLink: sheet?.webViewLink || '',
+      photos: uploadedPhotos,
+      entries: visibleEntries.length,
+    }
+  } catch (error) {
+    setState({ publishing: false, error: getErrorMessage(error) })
+    throw error
   }
 }
