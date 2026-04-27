@@ -315,6 +315,10 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
       <span class="d-label">Sync appData</span>
       <span id="driveInfo" class="d-status">—</span>
     </div>
+    <div class="d-row">
+      <span class="d-label">Corbeille</span>
+      <span id="trashInfo" class="d-status">0 entrée</span>
+    </div>
     <button id="checkDriveBtn" class="d-btn outline">🔍 Vérifier Drive caché</button>
 
     <hr style="border:none;border-top:1px solid #eee">
@@ -605,7 +609,11 @@ function cancelDeleteJobs(entryId){
 function purgeExpiredTrashEntries(entries){
   const maxAge = TRASH_RETENTION_DAYS * 86400000
   const now = Date.now()
-  return (entries||[]).filter(e=>!(e.deletedAt && (now - Number(e.deletedAt) > maxAge)))
+  return (entries||[]).filter(e=>{
+    const expired = e.deletedAt && (now - Number(e.deletedAt) > maxAge)
+    if(expired) enqueueDeleteJob(e)
+    return !expired
+  })
 }
 
 function entryModifiedAt(e){ return Number((e && (e.updatedAt || e.createdAt)) || 0) }
@@ -743,7 +751,15 @@ function updateDriveInfo(){
   const el = document.getElementById('driveInfo'); if(!el) return
   if(!gToken){el.textContent='—'; return}
   const v = localStorage.getItem('lastDriveSync')
-  el.textContent = v ? `${allEntries.length} entrées · ${new Date(Number(v)).toLocaleTimeString()}` : `${allEntries.length} entrées`
+  const visibleCount = allEntries.filter(e=>!e.deletedAt).length
+  el.textContent = v ? `${visibleCount} entrées · ${new Date(Number(v)).toLocaleTimeString()}` : `${visibleCount} entrées`
+}
+
+function updateTrashInfo(){
+  const el = document.getElementById('trashInfo')
+  if(!el) return
+  const count = allEntries.filter(e=>!!e.deletedAt).length
+  el.textContent = `${count} entrée${count>1?'s':''}`
 }
 
 // ── Drive My Drive (visible publish) ─────────────────
@@ -1150,9 +1166,10 @@ function renderList(){
 }
 function renderStorageBar(){
   const sz=new Blob([JSON.stringify(allEntries)]).size
-  document.getElementById('storageBar').textContent=`~${(sz/1024).toFixed(1)} KB · ${allEntries.length} entrées${gToken?' · ✓ Drive':''}`
+  const visibleCount = allEntries.filter(e=>!e.deletedAt).length
+  document.getElementById('storageBar').textContent=`~${(sz/1024).toFixed(1)} KB · ${visibleCount} entrées${gToken?' · ✓ Drive':''}`
 }
-function renderAll(){renderList();renderMarkers();renderStorageBar();updateDriveInfo()}
+function renderAll(){renderList();renderMarkers();renderStorageBar();updateDriveInfo();updateTrashInfo()}
 
 // ── Photos ────────────────────────────────────────────
 document.getElementById('addPhotoBtn').addEventListener('click',()=>document.getElementById('photoInput').click())
