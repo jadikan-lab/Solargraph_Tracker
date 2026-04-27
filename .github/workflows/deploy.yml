@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
   pages: write
@@ -28,6 +31,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - uses: actions/configure-pages@v4
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
