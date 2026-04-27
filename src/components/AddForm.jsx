@@ -1,105 +1,141 @@
 import React, { useState } from 'react'
 import imageCompression from 'browser-image-compression'
+import { Btn, Chip, Field, ScreenTitle, StatusPill, IconCheck, IconPin, IconCamera, IconChev } from '../ui.jsx'
 
-const BOX_TYPES = ['full', 'medium', 'small']
-const HOLE_SIZES = [0.26, 0.4, 0.5]
+const BOX_TYPES = ['Café 250g', 'Conserve', 'Alu', 'Boîte film']
+const HOLE_SIZES = [0.2, 0.26, 0.3, 0.4, 0.5]
+const ORIENTATIONS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO']
 
-export default function AddForm({ onAdd }) {
+export default function AddForm({ onAdd, onDone }) {
   const [photoData, setPhotoData] = useState(null)
+  const [secondaryPhoto, setSecondaryPhoto] = useState(null)
   const [boxType, setBoxType] = useState(BOX_TYPES[0])
-  const [holeDiameter, setHoleDiameter] = useState(HOLE_SIZES[0])
+  const [holeDiameter, setHoleDiameter] = useState(0.3)
+  const [orientation, setOrientation] = useState('SO')
+  const [name, setName] = useState('')
   const [loc, setLoc] = useState(null)
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const pickPhoto = async (file) => {
+  const pickPhoto = async (file, setter) => {
     if (!file) return
     try {
-      const options = { maxSizeMB: 0.5, maxWidthOrHeight: 1600 }
-      const compressed = await imageCompression(file, options)
+      const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1600 })
       const dataUrl = await imageCompression.getDataUrlFromFile(compressed)
-      setPhotoData(dataUrl)
-    } catch (err) {
-      console.error(err)
-      // fallback to direct read
+      setter(dataUrl)
+    } catch {
       const fr = new FileReader()
-      fr.onload = () => setPhotoData(fr.result)
+      fr.onload = () => setter(fr.result)
       fr.readAsDataURL(file)
     }
   }
 
   const captureLoc = () => {
-    if (!navigator.geolocation) {
-      alert('Géolocalisation non prise en charge')
-      return
-    }
+    if (!navigator.geolocation) return alert('Géolocalisation non prise en charge')
     navigator.geolocation.getCurrentPosition(
       (p) => setLoc({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
-      (err) => alert('Erreur géoloc: ' + err.message),
+      (err) => alert('Erreur géoloc : ' + err.message),
       { enableHighAccuracy: true, timeout: 10000 }
     )
   }
 
+  React.useEffect(() => { captureLoc() /* GPS auto */ }, [])
+
   const onSubmit = async (e) => {
     e.preventDefault()
-    if (!photoData) return alert('Ajoute une photo initiale')
+    if (!photoData) return alert('Ajoute la photo principale')
     setBusy(true)
     const entry = {
+      name: name || 'Sans nom',
       initialPhotoDataURL: photoData,
+      secondaryPhotoDataURL: secondaryPhoto,
       location: loc || null,
-      boxType,
-      holeDiameter_mm: holeDiameter,
-      notes,
-      retrievalDate: null,
-      finalPhotoDataURL: null
+      boxType, holeDiameter_mm: holeDiameter,
+      orientation, notes,
+      retrievalDate: null, finalPhotoDataURL: null,
     }
-    try {
-      await onAdd(entry)
-      setPhotoData(null)
-      setNotes('')
-      setLoc(null)
-      alert('Enregistré localement')
-    } catch (err) {
-      console.error(err)
-      alert("Erreur lors de l'enregistrement")
-    }
+    try { await onAdd(entry); onDone?.() }
+    catch (err) { console.error(err); alert("Erreur lors de l'enregistrement") }
     setBusy(false)
   }
 
   return (
-    <form className="add-form" onSubmit={onSubmit}>
-      <h2>Ajouter un sténopé</h2>
-      <label>
-        Photo initiale
-        <input type="file" accept="image/*" capture="environment" onChange={(e) => pickPhoto(e.target.files[0])} />
-      </label>
-      {photoData && <img src={photoData} alt="preview" className="preview" />}
+    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <ScreenTitle sub="nouvelle pose" right={<Chip muted icon={<IconCheck size={12}/>}>brouillon</Chip>}>Ajouter</ScreenTitle>
 
-      <label>
-        Type de boîte
-        <select value={boxType} onChange={(e) => setBoxType(e.target.value)}>
-          {BOX_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
-        </select>
-      </label>
-
-      <label>
-        Diamètre du trou (mm)
-        <select value={holeDiameter} onChange={(e) => setHoleDiameter(Number(e.target.value))}>
-          {HOLE_SIZES.map((h) => <option key={h} value={h}>{h}</option>)}
-        </select>
-      </label>
-
-      <label>
-        Notes
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </label>
-
-      <div className="loc-row">
-        <button type="button" onClick={captureLoc}>Capturer géoloc</button>
-        <small>{loc ? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} (±${Math.round(loc.accuracy)}m)` : 'Aucune'}</small>
+      {/* Photos */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: 10 }}>
+        <label style={{ position: 'relative', display: 'block' }}>
+          <input type="file" accept="image/*" capture="environment" onChange={(e) => pickPhoto(e.target.files[0], setPhotoData)}
+                 style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}/>
+          {photoData ? (
+            <img src={photoData} alt="" style={{ width: '100%', aspectRatio: '4/5', objectFit: 'cover', borderRadius: 10, border: '1px solid var(--papier-edge)' }}/>
+          ) : (
+            <div className="photo-ph" style={{ aspectRatio: '4/5' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <IconCamera size={20}/> photo principale
+              </span>
+            </div>
+          )}
+        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <label style={{ position: 'relative', display: 'block' }}>
+            <input type="file" accept="image/*" onChange={(e) => pickPhoto(e.target.files[0], setSecondaryPhoto)}
+                   style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}/>
+            {secondaryPhoto ? (
+              <img src={secondaryPhoto} alt="" style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: 10, border: '1px solid var(--papier-edge)' }}/>
+            ) : (
+              <div className="photo-ph" style={{ aspectRatio: '1/1' }}>+ ajouter</div>
+            )}
+          </label>
+          <div style={{ aspectRatio: '1/1', borderRadius: 10, border: '1px dashed var(--papier-edge)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--encre-mute)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>+ ajouter</div>
+        </div>
       </div>
 
-      <button type="submit" disabled={busy}>{busy ? '...' : 'Enregistrer'}</button>
+      {/* Status + GPS */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <StatusPill status="enplace" size="lg"/>
+        <Chip icon={<IconPin size={12}/>}>{loc ? `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}` : 'GPS…'}</Chip>
+        {loc && <Chip muted>± {Math.round(loc.accuracy)} m · auto</Chip>}
+        {!loc && <Chip muted onClick={captureLoc} style={{ cursor: 'pointer' }}>réessayer</Chip>}
+      </div>
+
+      <Field label="Nom du sténopé">
+        <input className="input" style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 18 }}
+               value={name} onChange={(e) => setName(e.target.value)} placeholder="Toit Ouest — équinoxe"/>
+      </Field>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <Field label="Boîte">
+          <select className="select" value={boxType} onChange={(e) => setBoxType(e.target.value)}>
+            {BOX_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </Field>
+        <Field label="Trou (Ø mm)">
+          <select className="select" value={holeDiameter} onChange={(e) => setHoleDiameter(Number(e.target.value))}>
+            {HOLE_SIZES.map((h) => <option key={h} value={h}>{h}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      <Field label="Orientation">
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {ORIENTATIONS.map((o) => (
+            <Chip key={o} active={orientation === o} onClick={() => setOrientation(o)} style={{ cursor: 'pointer' }}>{o}</Chip>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Notes terrain">
+        <textarea className="textarea" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Plein sud, fil nylon 0.5mm…"/>
+      </Field>
+
+      <Btn type="submit" kind="primary" size="lg" block disabled={busy} icon={<IconCheck size={18}/>}>
+        {busy ? 'Enregistrement…' : 'Enregistrer le sténopé'}
+      </Btn>
     </form>
   )
 }
