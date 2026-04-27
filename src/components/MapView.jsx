@@ -104,5 +104,5 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
     }
   }, [entries, onSelect])
 
-  return <div ref={elRef} style={{ height: '100%', width: '100%', touchAction: 'pan-x pan-y pinch-zoom' }}/>
+  return <div ref={elRef} style={{ height: '100%', width: '100%', touchAction: 'none' }}/>
 }

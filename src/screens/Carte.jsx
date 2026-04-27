@@ -15,6 +15,7 @@ export default function Carte({ entries, onSelect }) {
   })
   const [locError, setLocError] = useState('')
   const mapApiRef = useRef(null)
+  const dragYRef = useRef(null)
   const enplace = entries.filter((e) => !e.retrievalDate)
   const recup   = entries.filter((e) => e.retrievalDate)
   const filtered = filter === 'enplace' ? enplace : filter === 'recupere' ? recup : entries
@@ -23,7 +24,20 @@ export default function Carte({ entries, onSelect }) {
     try { sessionStorage.setItem(VIEW_KEY, JSON.stringify(view)) } catch {}
   }, [view])
 
-  const sheetH = sheet === 'full' ? '60dvh' : 168
+  const sheetH = sheet === 'full' ? '60dvh' : 92
+
+  const onHandleTouchStart = (e) => {
+    dragYRef.current = e.touches?.[0]?.clientY ?? null
+  }
+
+  const onHandleTouchEnd = (e) => {
+    if (dragYRef.current == null) return
+    const endY = e.changedTouches?.[0]?.clientY ?? dragYRef.current
+    const delta = endY - dragYRef.current
+    if (delta < -20) setSheet('full')
+    if (delta > 20) setSheet('peek')
+    dragYRef.current = null
+  }
 
   return (
     <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
@@ -75,11 +89,17 @@ export default function Carte({ entries, onSelect }) {
       )}
 
       {/* Bottom sheet */}
-      <div className="sheet" style={{ height: sheetH }}>
-        <div className="handle" onClick={() => setSheet(sheet === 'peek' ? 'full' : 'peek')} style={{ cursor: 'pointer' }}>
+      <div className="sheet" style={{ height: sheetH, pointerEvents: sheet === 'peek' ? 'none' : 'auto' }}>
+        <div
+          className="handle"
+          onClick={() => setSheet(sheet === 'peek' ? 'full' : 'peek')}
+          onTouchStart={onHandleTouchStart}
+          onTouchEnd={onHandleTouchEnd}
+          style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+        >
           <div className="handle-bar"/>
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8, pointerEvents: sheet === 'peek' ? 'none' : 'auto' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontWeight: 500, fontSize: 18 }}>
             {sheet === 'full' ? `${filtered.length} sténopés` : `${filtered.length} visible${filtered.length > 1 ? 's' : ''}`}
           </div>
@@ -88,7 +108,9 @@ export default function Carte({ entries, onSelect }) {
           </div>
         </div>
         {sheet === 'peek' ? (
-          filtered.length > 0 && <RowItem e={filtered[filtered.length - 1]} onSelect={onSelect}/>
+          <div style={{ fontSize: 11.5, color: 'var(--encre-mute)', textAlign: 'center', pointerEvents: 'none' }}>
+            Carte libre · glisser la poignée vers le haut pour ouvrir la liste
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'auto', maxHeight: 'calc(60dvh - 130px)' }}>
             {filtered.slice().reverse().map((e) => <RowItem key={e.id} e={e} onSelect={onSelect}/>)}
