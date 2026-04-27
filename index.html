@@ -1,9 +1,30 @@
 <!doctype html>
-<html lang="fr">
+<html>
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Solargraph Tracker</title>
+    <!-- Redirect to the standalone quick app -->
+    <meta http-equiv="refresh" content="0; URL=quick.html">
+  </head>
+  <body>
+    <p>Redirection vers l'application rapide — si tu vois ce message, ouvre <a href="quick.html">quick.html</a>.</p>
+  </body>
+</html>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Solargraph Tracker</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-sA+e2g6kQbQ4xqv6T3m6yYk4qQWvGQxk3Yf5Qv3hLMw="
+      crossorigin=""
+    />
   </head>
   <body>
     <div id="root"></div>

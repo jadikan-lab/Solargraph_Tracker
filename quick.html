@@ -1,12 +1,1104 @@
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Solargraph Tracker</title>
-    <meta http-equiv="refresh" content="0; URL=/" />
-  </head>
-  <body>
-    <p>Redirection vers l'application Solargraph Tracker...</p>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Solargraph Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+<script>
+// Callback officiel Google GSI — déclenché dès que le SDK est prêt
+window.onGoogleLibraryLoad = function(){
+  if(typeof initGoogleAuth === 'function') initGoogleAuth()
+}
+</script>
+<script src="https://accounts.google.com/gsi/client" async></script>
+<style>
+:root{
+  --blue:#0366d6;--green:#28a745;--red:#dc3545;--dark:#1a1a2e;
+  --bg:#f0f2f5;--card:#fff;--border:#e2e6ea;
+  --radius:12px;--tab-h:56px;--header-h:56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);display:flex;flex-direction:column;height:100dvh}
+
+/* ── Header ── */
+#header{
+  background:var(--dark);color:#fff;
+  height:var(--header-h);padding:0 12px;
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+#header h1{font-size:1rem;font-weight:700;flex:1;letter-spacing:.01em}
+#authDot{width:10px;height:10px;border-radius:50%;background:#555;flex-shrink:0}
+#authDot.ok{background:#4caf50}
+#gearBtn{
+  background:none;border:none;color:#fff;font-size:1.5rem;
+  cursor:pointer;padding:6px;border-radius:8px;line-height:1;
+}
+#gearBtn:active{background:rgba(255,255,255,.15)}
+
+/* ── Settings drawer ── */
+#drawerOverlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;
+  display:none;opacity:0;transition:opacity .25s;
+}
+#drawerOverlay.open{display:block;opacity:1}
+#drawer{
+  position:fixed;top:0;right:-320px;width:300px;max-width:90vw;height:100%;
+  background:#fff;z-index:101;padding:0;
+  transition:right .25s ease;display:flex;flex-direction:column;
+  box-shadow:-4px 0 20px rgba(0,0,0,.25);
+}
+#drawer.open{right:0}
+#drawerHead{
+  background:var(--dark);color:#fff;padding:16px;
+  display:flex;align-items:center;gap:8px;
+}
+#drawerHead h2{font-size:1rem;flex:1}
+#drawerClose{background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;padding:4px}
+#drawerBody{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.d-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.d-label{font-size:0.8rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;flex:1}
+.d-status{font-size:0.82rem;color:#555}
+.d-btn{
+  width:100%;padding:13px 12px;border:none;border-radius:var(--radius);
+  font-size:0.95rem;font-weight:700;cursor:pointer;text-align:center;
+}
+.d-btn.primary{background:var(--blue);color:#fff}
+.d-btn.success{background:var(--green);color:#fff}
+.d-btn.danger{background:var(--red);color:#fff}
+.d-btn.outline{background:#fff;color:#333;border:1.5px solid var(--border)}
+.d-btn:active{filter:brightness(.9)}
+.toggle-row{display:flex;align-items:center;gap:10px;padding:4px 0}
+.toggle-row label{flex:1;font-size:0.95rem}
+.toggle{position:relative;width:46px;height:26px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#ccc;border-radius:13px;transition:.2s}
+.slider:before{content:'';position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:var(--green)}
+.toggle input:checked+.slider:before{transform:translateX(20px)}
+#pubProgress{width:100%;height:8px;border-radius:4px;display:none}
+#pubStatus{font-size:0.8rem;color:#555;text-align:center;min-height:18px}
+
+/* ── Tabs ── */
+#tabs{
+  display:flex;background:#fff;
+  border-bottom:2px solid var(--border);flex-shrink:0;
+  box-shadow:0 1px 4px rgba(0,0,0,.06);
+}
+.tab{
+  flex:1;height:var(--tab-h);border:none;background:none;cursor:pointer;
+  font-size:0.95rem;color:#777;
+  border-bottom:3px solid transparent;margin-bottom:-2px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+}
+.tab .tab-icon{font-size:1.25rem;line-height:1}
+.tab .tab-lbl{font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* filter button active */
+.filter-active{background:var(--blue)!important;color:#fff!important;border-color:var(--blue)!important}
+
+/* ── Panels ── */
+.panel{display:none;flex:1;overflow-y:auto;flex-direction:column;min-height:0;overscroll-behavior:contain}
+.panel.active{display:flex}
+#panelForm{padding:14px;gap:12px}
+#panelList{padding:12px;gap:10px}
+#panelMap{padding:0}
+#map{flex:1;min-height:0;height:100%}
+
+/* ── Form ── */
+.btn-photo{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  background:#fff;color:var(--blue);border:2.5px dashed var(--blue);
+  border-radius:var(--radius);padding:18px;font-size:1.05rem;
+  cursor:pointer;width:100%;font-weight:700;min-height:64px;
+}
+.btn-photo:active{background:#e8f0fe}
+.btn-save{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  background:var(--green);color:#fff;border:none;
+  border-radius:var(--radius);padding:18px;font-size:1.1rem;
+  font-weight:700;cursor:pointer;width:100%;min-height:64px;
+}
+.btn-save:active{filter:brightness(.9)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:0.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em}
+.field select,.field textarea{
+  width:100%;padding:13px 12px;
+  border:1.5px solid var(--border);border-radius:var(--radius);
+  font-size:1rem;background:#fff;
+  -webkit-appearance:none;appearance:none;
+}
+.field select:focus,.field textarea:focus{outline:none;border-color:var(--blue)}
+.field textarea{resize:vertical;min-height:72px}
+#photosPreview{display:flex;flex-wrap:wrap;gap:8px}
+.photo-thumb{position:relative}
+.photo-thumb img{width:88px;height:88px;object-fit:cover;border-radius:10px;display:block}
+.photo-thumb .del{
+  position:absolute;top:4px;right:4px;
+  background:rgba(0,0,0,.7);color:#fff;border:none;
+  border-radius:50%;width:24px;height:24px;
+  cursor:pointer;font-size:0.85rem;line-height:24px;text-align:center;padding:0;
+}
+#geoStatus{
+  font-size:0.88rem;padding:10px 12px;
+  background:#fff;border-radius:var(--radius);
+  border:1.5px solid var(--border);
+}
+#geoStatus.ok{color:var(--green);border-color:var(--green)}
+#geoStatus.err{color:var(--red);border-color:var(--red)}
+
+/* ── List ── */
+.entry-card{
+  background:var(--card);border:1.5px solid var(--border);
+  border-radius:var(--radius);padding:12px;flex-shrink:0;
+}
+.entry-card.retrieved{border-color:#b2dfdb;background:#f0faf8}
+.entry-head{display:flex;gap:10px}
+.entry-thumb img{
+  width:80px;height:80px;object-fit:cover;border-radius:10px;display:block;
+}
+.entry-info{flex:1;min-width:0}
+.entry-date{font-weight:700;font-size:0.95rem}
+.entry-chip{
+  display:inline-block;background:#e8f0fe;color:var(--blue);
+  border-radius:6px;padding:2px 7px;font-size:0.78rem;font-weight:700;
+  margin-right:4px;margin-top:4px;
+}
+.entry-chip.green{background:#e8f5e9;color:var(--green)}
+.entry-meta{font-size:0.82rem;color:#666;margin-top:3px}
+.entry-notes{font-size:0.82rem;color:#333;margin-top:5px;font-style:italic}
+.retrieved-badge{color:var(--green);font-size:0.82rem;margin-top:4px;font-weight:700}
+.entry-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.btn-xs{
+  border-radius:8px;padding:9px 12px;cursor:pointer;
+  font-size:0.85rem;font-weight:600;border:1.5px solid var(--border);
+  background:#fff;color:#333;
+}
+.btn-xs.danger{color:var(--red);border-color:var(--red)}
+.btn-xs:active{filter:brightness(.9)}
+#storageBar{font-size:0.75rem;color:#999;text-align:center;flex-shrink:0;padding:4px 0}
+#exportRow{
+  display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;
+  padding:10px 0 4px;border-top:1px solid var(--border);
+}
+.btn-out{
+  flex:1;padding:11px;border:1.5px solid var(--border);border-radius:10px;
+  background:#fff;cursor:pointer;font-size:0.85rem;font-weight:600;text-align:center;
+}
+.btn-danger-sm{
+  flex:1;padding:11px;border:none;border-radius:10px;
+  background:var(--red);color:#fff;cursor:pointer;
+  font-size:0.85rem;font-weight:600;
+}
+.empty{text-align:center;color:#bbb;padding:40px 20px;font-size:0.95rem}
+
+/* ── Toast ── */
+#toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);
+  background:#333;color:#fff;padding:12px 20px;border-radius:var(--radius);
+  font-size:0.9rem;z-index:200;opacity:0;transition:transform .25s,opacity .25s;
+  max-width:90vw;text-align:center;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── Edit modal (bottom sheet) ── */
+#editOverlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;
+  display:none;
+}
+#editOverlay.open{display:block}
+#editSheet{
+  position:fixed;left:0;right:0;bottom:-100%;
+  max-height:92dvh;background:#fff;z-index:301;
+  border-radius:18px 18px 0 0;
+  display:flex;flex-direction:column;
+  transition:bottom .3s ease;
+  box-shadow:0 -4px 24px rgba(0,0,0,.18);
+}
+#editSheet.open{bottom:0}
+#editSheetHead{
+  background:var(--dark);color:#fff;padding:16px;
+  display:flex;align-items:center;gap:8px;
+  border-radius:18px 18px 0 0;flex-shrink:0;
+}
+#editSheetHead h2{font-size:1rem;flex:1}
+#editSheetClose{background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;padding:4px;line-height:1}
+#editSheetBody{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+#editPhotosPreview{display:flex;flex-wrap:wrap;gap:8px}
+.btn-save-edit{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--blue);color:#fff;border:none;
+  border-radius:var(--radius);padding:16px;font-size:1.05rem;
+  font-weight:700;cursor:pointer;width:100%;min-height:56px;flex-shrink:0;
+  margin-top:4px;
+}
+.btn-save-edit:active{filter:brightness(.9)}
+
+/* ── Map markers ── */
+.map-pin{
+  width:28px;height:28px;border-radius:50%;border:3px solid #fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.35);
+}
+.map-pin.active{background:#27ae60} /* green = still in place */
+.map-pin.retrieved{background:#e67e22} /* orange = retrieved */
+
+/* map legend */
+#mapLegend{
+  position:absolute;top:10px;right:10px;z-index:520;background:rgba(255,255,255,0.95);
+  padding:8px 10px;border-radius:10px;border:1px solid var(--border);font-size:0.85rem;color:#333;
+  box-shadow:0 2px 8px rgba(0,0,0,.12);
+}
+.mapLegendItem{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.mapLegendSwatch{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:6px}
+
+/* ensure legend positioned relative to panel */
+#panelMap{position:relative}
+
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <h1>🌞 Solargraph Tracker</h1>
+  <div id="authDot" title="Déconnecté"></div>
+  <button id="gearBtn" title="Paramètres">⚙️</button>
+</div>
+
+<!-- Settings drawer -->
+<div id="drawerOverlay"></div>
+<div id="drawer">
+  <div id="drawerHead">
+    <h2>⚙️ Paramètres Drive</h2>
+    <button id="drawerClose">✕</button>
+  </div>
+  <div id="drawerBody">
+    <div class="d-row">
+      <span class="d-label">Compte</span>
+      <span id="authStatus" class="d-status">Déconnecté</span>
+    </div>
+    <button id="authBtn" class="d-btn primary">Connexion Google</button>
+
+    <hr style="border:none;border-top:1px solid #eee">
+
+    <div class="d-row">
+      <span class="d-label">Sync appData</span>
+      <span id="driveInfo" class="d-status">—</span>
+    </div>
+    <button id="checkDriveBtn" class="d-btn outline">🔍 Vérifier Drive caché</button>
+
+    <hr style="border:none;border-top:1px solid #eee">
+
+    <div class="toggle-row">
+      <label for="autoPublishToggle">Auto-publish sur Mon Drive</label>
+      <label class="toggle">
+        <input type="checkbox" id="autoPublishToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <button id="publishBtn" class="d-btn success">📤 Publier sur Mon Drive</button>
+    <progress id="pubProgress" value="0" max="100"></progress>
+    <div id="pubStatus"></div>
+    <button id="resetDriveLinks" class="d-btn outline">🔄 Réinitialiser liens Drive</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div id="tabs">
+  <button class="tab active" data-tab="panelForm">
+    <span class="tab-icon">📷</span><span class="tab-lbl">Ajouter</span>
+  </button>
+  <button class="tab" data-tab="panelList">
+    <span class="tab-icon">📋</span><span class="tab-lbl">Liste</span>
+  </button>
+  <button class="tab" data-tab="panelMap">
+    <span class="tab-icon">🗺</span><span class="tab-lbl">Carte</span>
+  </button>
+</div>
+
+<!-- Panel Form -->
+<div id="panelForm" class="panel active">
+  <button class="btn-photo" id="addPhotoBtn">📷 Ajouter photo(s) sténopé</button>
+  <input id="photoInput" type="file" accept="image/*" capture="environment" style="display:none" multiple>
+  <div id="photosPreview"></div>
+  <div class="field">
+    <label>Type de boîte</label>
+    <select id="boxType">
+      <option>5x7 can</option>
+      <option>large (5x3.5)</option>
+      <option>small (2.5x3.5)</option>
+      <option>mini</option>
+      <option>custom</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Diamètre trou (mm)</label>
+    <select id="hole"><option>0.26</option><option>0.4</option><option>0.5</option></select>
+  </div>
+  <div class="field">
+    <label>Type de papier</label>
+    <select id="paperType">
+      <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option><option>random</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Notes</label>
+    <textarea id="notes" placeholder="Orientation, lieu, conditions…"></textarea>
+  </div>
+  <div class="field">
+    <label>Orientation</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="orientationSelect" style="flex:1">
+        <option>N</option><option>NE</option><option>E</option><option>SE</option>
+        <option>S</option><option>SW</option><option>W</option><option>NW</option>
+        <option value="libre">Libre (°)</option>
+      </select>
+      <input id="orientationDegree" type="number" placeholder="°" min="0" max="360" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);display:none">
+    </div>
+  </div>
+  <div id="geoStatus" onclick="startGeoloc()" style="cursor:pointer" title="Tap pour relancer">📍 Géoloc en attente…</div>
+  <button class="btn-save" id="saveBtn">💾 Enregistrer le sténopé</button>
+</div>
+
+<!-- Panel List -->
+<div id="panelList" class="panel">
+  <div id="listControls" style="display:flex;gap:8px;align-items:center;padding:8px 0 6px">
+    <div style="display:flex;gap:6px">
+      <button class="btn-out filter-btn" data-filter="all" id="filterAll">Tous</button>
+      <button class="btn-out filter-btn" data-filter="open" id="filterOpen">En cours</button>
+      <button class="btn-out filter-btn" data-filter="retrieved" id="filterRetrieved">Récupérés</button>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <label style="font-size:0.85rem;color:#666">Trier:</label>
+      <select id="sortSelect" style="padding:8px;border-radius:8px;border:1px solid var(--border)">
+        <option value="date_desc">Date (récent)</option>
+        <option value="date_asc">Date (ancien)</option>
+        <option value="dur_desc">Durée (longue)</option>
+        <option value="dur_asc">Durée (courte)</option>
+      </select>
+    </div>
+  </div>
+  <div id="storageBar"></div>
+  <div id="list"></div>
+  <div id="exportRow">
+    <button class="btn-out" id="exportJson">⬇ JSON</button>
+    <button class="btn-out" id="exportKml">⬇ KML</button>
+    <button class="btn-danger-sm" id="clearAll">🗑 Tout effacer</button>
+  </div>
+</div>
+
+<!-- Panel Map -->
+<div id="panelMap" class="panel">
+  <div id="map"></div>
+  <div id="mapLegend">
+    <div class="mapLegendItem"><span class="mapLegendSwatch" style="background:#27ae60"></span> En place</div>
+    <div class="mapLegendItem"><span class="mapLegendSwatch" style="background:#e67e22"></span> Récupéré</div>
+  </div>
+</div>
+
+<!-- Edit modal (bottom sheet) -->
+<div id="editOverlay"></div>
+<div id="editSheet">
+  <div id="editSheetHead">
+    <h2>✏️ Modifier le sténopé</h2>
+    <button id="editSheetClose">✕</button>
+  </div>
+  <div id="editSheetBody">
+    <button class="btn-photo" id="editAddPhotoBtn">📷 Ajouter des photos</button>
+    <input id="editPhotoInput" type="file" accept="image/*" style="display:none" multiple>
+    <div id="editPhotosPreview"></div>
+    <div class="field">
+      <label>Type de boîte</label>
+      <select id="editBoxType">
+        <option>5x7 can</option>
+        <option>large (5x3.5)</option>
+        <option>small (2.5x3.5)</option>
+        <option>mini</option>
+        <option>custom</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Diamètre trou (mm)</label>
+      <select id="editHole"><option>0.26</option><option>0.4</option><option>0.5</option></select>
+    </div>
+    <div class="field">
+      <label>Type de papier</label>
+      <select id="editPaperType">
+        <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option><option>random</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Orientation</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="editOrientationSelect" style="flex:1">
+          <option>N</option><option>NE</option><option>E</option><option>SE</option>
+          <option>S</option><option>SW</option><option>W</option><option>NW</option>
+          <option value="libre">Libre (°)</option>
+        </select>
+        <input id="editOrientationDegree" type="number" placeholder="°" min="0" max="360" style="width:80px;padding:8px;border-radius:8px;border:1px solid var(--border);display:none">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="editNotes" placeholder="Orientation, lieu, conditions…"></textarea>
+    </div>
+    <button class="btn-save-edit" id="editSaveBtn">💾 Enregistrer les modifications</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
+const GOOGLE_CLIENT_ID = '724133061731-g3lmkdkm84ejd2utads9a0i2sj63m1j9.apps.googleusercontent.com'
+const DRIVE_SCOPE    = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file'
+const DRIVE_FILENAME = 'solargraph_entries.json'
+const IDB_KEY        = 'solar_entries_v3'
+const UPLOAD_CONCURRENCY = 3   // parallel uploads at a time
+
+localforage.config({ name: 'solargraph_trk' })
+
+let gToken       = null
+let driveFileId  = null
+let allEntries   = []
+let pendingPhotos = []
+let currentLoc   = null
+let lastDriveSync = null
+// list/filter/sort state
+let currentFilter = 'all' // all | open | retrieved
+let currentSort = 'date_desc'
+
+function applyFilterSort(entries){
+  let out = (entries||[]).slice()
+  // filter
+  if(currentFilter==='open') out = out.filter(e=>!e.retrievalDate)
+  else if(currentFilter==='retrieved') out = out.filter(e=>!!e.retrievalDate)
+  // sort
+  out.sort((a,b)=>{
+    if(currentSort==='date_desc') return (b.createdAt||0)-(a.createdAt||0)
+    if(currentSort==='date_asc') return (a.createdAt||0)-(b.createdAt||0)
+    // duration: use retrieval-created difference (or now-created for open)
+    const da = ((a.retrievalDate||Date.now()) - (a.createdAt||0))
+    const db = ((b.retrievalDate||Date.now()) - (b.createdAt||0))
+    if(currentSort==='dur_desc') return db-da
+    if(currentSort==='dur_asc') return da-db
+    return 0
+  })
+  return out
+}
+
+// ── Toast ─────────────────────────────────────────────
+let _toastTimer = null
+function toast(msg, duration=2500){
+  const el = document.getElementById('toast')
+  el.textContent = msg; el.classList.add('show')
+  if(_toastTimer) clearTimeout(_toastTimer)
+  _toastTimer = setTimeout(()=>el.classList.remove('show'), duration)
+}
+
+// ── IndexedDB ─────────────────────────────────────────
+async function localLoad(){ try{ return (await localforage.getItem(IDB_KEY))||[] }catch{ return [] } }
+async function localSave(arr){ await localforage.setItem(IDB_KEY, arr) }
+
+// ── Helpers ───────────────────────────────────────────
+function sanitize(s){ return (s||'').toString().replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_\-.]/g,'') }
+function entryFilename(e, idx, isFinal=false){
+  const d = new Date(e.createdAt||Date.now())
+  const dd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const suf = isFinal ? 'final' : String(idx)
+  return `${dd}_${sanitize(e.boxType)}_${sanitize(e.paperType)}_${sanitize(e.holeDiameter_mm)}_${suf}.jpg`
+}
+
+// ── Drive appData (hidden sync) ───────────────────────
+async function driveFind(){
+  const q = encodeURIComponent(`name='${DRIVE_FILENAME}'`)
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
+  const d = await r.json()
+  return d.files && d.files[0] ? d.files[0].id : null
+}
+async function driveRead(fid){
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fid}?alt=media`,{headers:{Authorization:`Bearer ${gToken}`}})
+  return r.json()
+}
+async function driveWrite(entries){
+  const content = JSON.stringify(entries)
+  if(driveFileId){
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,{
+      method:'PATCH',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},body:content})
+  } else {
+    const bnd = 'solar_bnd_'+Date.now()
+    const meta = JSON.stringify({name:DRIVE_FILENAME,parents:['appDataFolder']})
+    const body = `--${bnd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${bnd}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${bnd}--`
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+      method:'POST',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':`multipart/related; boundary=${bnd}`},body})
+    const d = await r.json(); if(d.id) driveFileId = d.id
+  }
+  lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
+}
+async function syncFromDrive(){
+  try{
+    driveFileId = await driveFind()
+    if(driveFileId){
+      allEntries = await driveRead(driveFileId)
+      await localSave(allEntries)
+      lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
+    } else if(allEntries.length>0){
+      await driveWrite(allEntries)
+    }
+  }catch(e){console.error('Drive sync:',e)}
+}
+async function saveAndSync(arr){
+  allEntries = arr
+  await localSave(arr)
+  if(gToken){ try{await driveWrite(arr)}catch(e){console.error('driveWrite:',e)} }
+  if(gToken && localStorage.getItem('autoPublish')==='1'){
+    try{await publishEntriesToMyDrive(allEntries)}catch(e){console.error('auto-publish:',e)}
+  }
+  renderAll()
+}
+
+// ── Google Auth ───────────────────────────────────────
+function initGoogleAuth(){
+  if(typeof google==='undefined'||!google.accounts) return
+  window.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id:GOOGLE_CLIENT_ID, scope:DRIVE_SCOPE,
+    callback: async resp=>{
+      if(resp.error){toast('Erreur auth: '+resp.error); return}
+      gToken = resp.access_token
+      updateAuthUI(true)
+      try{localStorage.setItem('gsi_granted','1')}catch(e){}
+      await syncFromDrive(); renderAll()
+    }
+  })
+  try{
+    if(localStorage.getItem('gsi_granted')) window.tokenClient.requestAccessToken()
+  }catch(e){console.warn('silent token:',e)}
+}
+document.getElementById('authBtn').addEventListener('click',()=>{
+  if(gToken){
+    google.accounts.oauth2.revoke(gToken,()=>{gToken=null;try{localStorage.removeItem('gsi_granted')}catch(e){}; updateAuthUI(false)})
+  } else {
+    if(window.tokenClient) window.tokenClient.requestAccessToken()
+    else toast('SDK Google non chargé, attends 2s')
+  }
+})
+function updateAuthUI(loggedIn){
+  document.getElementById('authBtn').textContent = loggedIn ? '🔓 Déconnexion' : '�� Connexion Google'
+  document.getElementById('authBtn').className = loggedIn ? 'd-btn danger' : 'd-btn primary'
+  document.getElementById('authStatus').textContent = loggedIn ? '✓ Connecté' : 'Déconnecté'
+  document.getElementById('authDot').className = loggedIn ? 'ok' : ''
+  document.getElementById('authDot').title = loggedIn ? 'Connecté à Google Drive' : 'Déconnecté'
+  renderStorageBar(); updateDriveInfo()
+}
+function updateDriveInfo(){
+  const el = document.getElementById('driveInfo'); if(!el) return
+  if(!gToken){el.textContent='—'; return}
+  const v = localStorage.getItem('lastDriveSync')
+  el.textContent = v ? `${allEntries.length} entrées · ${new Date(Number(v)).toLocaleTimeString()}` : `${allEntries.length} entrées`
+}
+
+// ── Drive My Drive (visible publish) ─────────────────
+async function driveFindFolder(name){
+  const q = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents`)
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
+  const d = await r.json(); return d.files&&d.files[0]?d.files[0].id:null
+}
+async function driveCreateFolder(name){
+  const r = await fetch('https://www.googleapis.com/drive/v3/files',{
+    method:'POST',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},
+    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:['root']})})
+  return (await r.json()).id
+}
+async function getFileMeta(id){
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,name,webViewLink`,{headers:{Authorization:`Bearer ${gToken}`}})
+  return r.json()
+}
+async function driveFindFileInFolder(folderId,filename){
+  const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents`)
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
+  const d = await r.json(); return d.files&&d.files[0]?d.files[0].id:null
+}
+async function uploadDataURLToFolder(dataURL,filename,folderId){
+  const binStr = atob(dataURL.split(',')[1])
+  const u8 = new Uint8Array(binStr.length)
+  for(let i=0;i<binStr.length;i++) u8[i]=binStr.charCodeAt(i)
+  const blob = new Blob([u8],{type:'image/jpeg'})
+  const meta = JSON.stringify({name:filename,parents:[folderId]})
+  const fd = new FormData()
+  fd.append('metadata',new Blob([meta],{type:'application/json'}))
+  fd.append('file',blob,filename)
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+    method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
+  const j = await r.json()
+  if(j&&j.id){ const m=await getFileMeta(j.id); return Object.assign({},j,m) }
+  return j
+}
+async function uploadJSONToFolder(obj,filename,folderId){
+  const content = JSON.stringify(obj)
+  const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents`)
+  const r0 = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
+  const d0 = await r0.json()
+  if(d0.files&&d0.files[0]){
+    const id=d0.files[0].id
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,{
+      method:'PATCH',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},body:content})
+    return {id}
+  }
+  const fd = new FormData()
+  fd.append('metadata',new Blob([JSON.stringify({name:filename,parents:[folderId]})],{type:'application/json'}))
+  fd.append('file',new Blob([content],{type:'application/json'}),filename)
+  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+    method:'POST',headers:{Authorization:`Bearer ${gToken}`},body:fd})
+  return r.json()
+}
+
+// ── Parallel publish ──────────────────────────────────
+async function publishEntriesToMyDrive(entries){
+  if(!gToken) throw new Error('Not authenticated')
+  const folderName = 'Solargraph_Tracker'
+  let folderId = await driveFindFolder(folderName)
+  if(!folderId) folderId = await driveCreateFolder(folderName)
+
+  // Build flat list of upload tasks
+  const tasks = []
+  for(const e of entries){
+    e.myDrivePhotos = e.myDrivePhotos||[]
+    for(let i=0;i<(e.photos||[]).length;i++){
+      if(e.myDrivePhotos[i]&&e.myDrivePhotos[i].fileId) continue // already uploaded
+      tasks.push({e, i, url:e.photos[i], fname:entryFilename(e,i,false), isFinal:false})
+    }
+    if(e.finalPhotoDataURL&&!(e.myDriveFinal&&e.myDriveFinal.fileId)){
+      tasks.push({e, i:-1, url:e.finalPhotoDataURL, fname:entryFilename(e,-1,true), isFinal:true})
+    }
+  }
+
+  const total = tasks.length
+  let done = 0
+  const progEl = document.getElementById('pubProgress')
+  const statusEl = document.getElementById('pubStatus')
+  if(progEl){ progEl.style.display='block'; progEl.value=0 }
+  const upd = ()=>{
+    done++
+    if(progEl&&total>0) progEl.value = Math.round((done/total)*100)
+    if(statusEl) statusEl.textContent = `${done}/${total} photos`
+  }
+
+  // Pool: run UPLOAD_CONCURRENCY tasks at a time
+  async function runTask(t){
+    const existingId = await driveFindFileInFolder(folderId, t.fname)
+    let result
+    if(existingId){
+      const m = await getFileMeta(existingId)
+      result = { fileId:m.id, name:m.name, webViewLink:m.webViewLink }
+    } else {
+      const res = await uploadDataURLToFolder(t.url, t.fname, folderId)
+      if(res&&res.id) result = { fileId:res.id, name:res.name, webViewLink:res.webViewLink }
+    }
+    if(result){
+      if(t.isFinal) t.e.myDriveFinal = result
+      else t.e.myDrivePhotos[t.i] = result
+    }
+    upd()
+  }
+
+  // Chunked parallel execution
+  for(let i=0;i<tasks.length;i+=UPLOAD_CONCURRENCY){
+    await Promise.all(tasks.slice(i,i+UPLOAD_CONCURRENCY).map(runTask))
+  }
+
+  if(total===0 && statusEl) statusEl.textContent = 'Aucune nouvelle photo à publier'
+
+  await uploadJSONToFolder(entries,'solargraph_entries.json',folderId)
+  if(statusEl) statusEl.textContent = total>0 ? `✓ ${total} photos publiées` : '✓ Métadonnées mises à jour'
+  if(progEl) progEl.value = 100
+
+  try{await localSave(entries); if(gToken) await driveWrite(entries)}catch(e){}
+  lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
+  updateDriveInfo()
+
+  setTimeout(()=>{
+    if(progEl){progEl.style.display='none'; progEl.value=0}
+    if(statusEl) statusEl.textContent=''
+  },3000)
+
+  return {folderId, total}
+}
+
+document.getElementById('publishBtn').addEventListener('click',async()=>{
+  if(!gToken){toast('Connecte-toi d\u2019abord à Google.'); return}
+  document.getElementById('pubStatus').textContent = 'Démarrage…'
+  document.getElementById('pubProgress').style.display='block'
+  try{
+    const r = await publishEntriesToMyDrive(allEntries)
+    toast(`✓ Publié : ${r.total} photo(s) sur Mon Drive`)
+  }catch(e){toast('Erreur: '+(e.message||e)); console.error(e)}
+})
+document.getElementById('checkDriveBtn').addEventListener('click',async()=>{
+  if(!gToken){toast('Connecte-toi d\u2019abord.'); return}
+  try{
+    const fid=await driveFind()
+    if(!fid){toast('Aucun fichier dans appDataFolder'); return}
+    const data=await driveRead(fid)
+    const v=localStorage.getItem('lastDriveSync')
+    toast(`Drive: ${Array.isArray(data)?data.length:0} entrées · ${v?new Date(Number(v)).toLocaleString():'n/a'}`, 4000)
+  }catch(e){toast('Erreur Drive: '+(e.message||e))}
+})
+document.getElementById('resetDriveLinks').addEventListener('click',async()=>{
+  if(!confirm('Réinitialiser les liens Drive ? Le prochain publish re-uploadera tout.')) return
+  for(const e of allEntries){delete e.myDrivePhotos; delete e.myDriveFinal}
+  await saveAndSync(allEntries)
+  toast('Liens réinitialisés ✓')
+})
+
+// auto-publish toggle
+const autoToggle = document.getElementById('autoPublishToggle')
+try{autoToggle.checked = localStorage.getItem('autoPublish')==='1'}catch(e){}
+autoToggle.addEventListener('change',()=>{
+  try{localStorage.setItem('autoPublish',autoToggle.checked?'1':'0')}catch(e){}
+  toast(autoToggle.checked?'Auto-publish activé':'Auto-publish désactivé')
+})
+
+// ── Drawer ────────────────────────────────────────────
+const drawer=document.getElementById('drawer')
+const overlay=document.getElementById('drawerOverlay')
+function openDrawer(){drawer.classList.add('open');overlay.classList.add('open')}
+function closeDrawer(){drawer.classList.remove('open');overlay.classList.remove('open')}
+document.getElementById('gearBtn').addEventListener('click',openDrawer)
+document.getElementById('drawerClose').addEventListener('click',closeDrawer)
+overlay.addEventListener('click',closeDrawer)
+
+// ── Map ───────────────────────────────────────────────
+const map = L.map('map').setView([46,2],5)
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map)
+const markerLayer = L.layerGroup().addTo(map)
+
+function makeIcon(retrieved){
+  return L.divIcon({
+    className:'',
+    html:`<div class="map-pin ${retrieved?'retrieved':'active'}"></div>`,
+    iconSize:[28,28],iconAnchor:[14,14],popupAnchor:[0,-16]
+  })
+}
+
+function renderMarkers(){
+  markerLayer.clearLayers()
+  const items = applyFilterSort(allEntries)
+  items.forEach(e=>{
+    if(!e.location) return
+    const fp = (e.photos&&e.photos[0])||null
+    const orientationLabel = e.orientation ? (e.orientationDeg? `${e.orientation} (${e.orientationDeg}°)`: e.orientation) : ''
+    const days = e.retrievalDate ? Math.round((e.retrievalDate - e.createdAt)/86400000) : Math.round((Date.now()-e.createdAt)/86400000)
+    const popup = `
+      <div style="max-width:260px">
+        <strong>${new Date(e.createdAt).toLocaleString()}</strong>
+        <div>${e.boxType} · ${e.holeDiameter_mm}mm · ${e.paperType||''}</div>
+        ${orientationLabel?`<div>Orientation: ${orientationLabel}</div>`:''}
+        ${e.retrievalDate?`<div style="color:orange">✓ Récupéré ${new Date(e.retrievalDate).toLocaleDateString()}</div><div>Durée: ${days} j</div>`:`<div style="color:green">En place: ${days} j</div>`}
+        ${e.notes?`<div style="font-style:italic;margin-top:4px">${e.notes}</div>`:''}
+        ${fp?`<img src="${fp}" style="max-width:250px;border-radius:8px;margin-top:8px;display:block">`:''}
+        ${e.finalPhotoDataURL?`<div style="margin-top:6px"><em>Finale:</em><br><img src="${e.finalPhotoDataURL}" style="max-width:250px;border-radius:8px;margin-top:4px;display:block"></div>`:''}
+      </div>`
+    L.marker([e.location.lat,e.location.lng],{icon:makeIcon(!!e.retrievalDate)}).bindPopup(popup).addTo(markerLayer)
+  })
+  setTimeout(()=>map.invalidateSize(),100)
+}
+
+// ── List ──────────────────────────────────────────────
+function renderList(){
+  const c=document.getElementById('list'); c.innerHTML=''
+  const items = applyFilterSort(allEntries)
+  if(!items.length){c.innerHTML='<div class="empty">Aucun sténopé enregistré</div>'; return}
+  items.forEach(e=>{
+    const thumb=(e.photos&&e.photos[0])||null
+    const card=document.createElement('div')
+    card.className='entry-card'+(e.retrievalDate?' retrieved':'')
+    const orientationLabel = e.orientation ? (e.orientationDeg? `${e.orientation} (${e.orientationDeg}°)`: e.orientation) : ''
+    const days = e.retrievalDate ? Math.round((e.retrievalDate - e.createdAt)/86400000) : Math.round((Date.now()-e.createdAt)/86400000)
+    card.innerHTML=`
+      <div class="entry-head">
+        ${thumb?`<div class="entry-thumb"><img src="${thumb}" loading="lazy"/></div>`:''}
+        <div class="entry-info">
+          <div class="entry-date">${new Date(e.createdAt).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})}</div>
+          <span class="entry-chip">${e.boxType}</span>
+          <span class="entry-chip">${e.holeDiameter_mm}mm</span>
+          <span class="entry-chip${e.retrievalDate?' green':''}">${e.paperType||''}</span>
+          <div class="entry-meta">${e.location?`📍 ${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)} ±${Math.round(e.location.accuracy)}m`:'📍 Pas de géoloc'}</div>
+          ${orientationLabel?`<div class="entry-meta">Orientation: ${orientationLabel}</div>`:''}
+          ${e.notes?`<div class="entry-notes">${e.notes}</div>`:''}
+          <div class="entry-meta">${e.retrievalDate?`Durée: ${days} j`:`En place: ${days} j`}</div>
+          ${e.retrievalDate?`<div class="retrieved-badge">✓ Récupéré le ${new Date(e.retrievalDate).toLocaleDateString('fr-FR')}</div>`:''}
+        </div>
+      </div>
+      <div class="entry-actions"></div>`
+    const act=card.querySelector('.entry-actions')
+    const mk=(label,fn,danger)=>{const b=document.createElement('button');b.className='btn-xs'+(danger?' danger':'');b.textContent=label;b.onclick=fn;return b}
+    act.appendChild(mk('🗺 Voir',()=>{switchTab('panelMap');if(e.location)setTimeout(()=>map.setView([e.location.lat,e.location.lng],15),300)}))
+    act.appendChild(mk('✏️ Modifier',()=>openEditModal(e.id)))
+    act.appendChild(mk(e.retrievalDate?'↩ Annuler récup':'✓ Récupéré',async()=>{const i=allEntries.findIndex(x=>x.id===e.id);if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now();await saveAndSync(allEntries)}}))
+    act.appendChild(mk('📷 Photo finale',()=>openFinalUpload(e.id)))
+    if(e.myDrivePhotos&&e.myDrivePhotos[0]&&e.myDrivePhotos[0].webViewLink)
+      act.appendChild(mk('🔗 Drive',()=>window.open(e.myDrivePhotos[0].webViewLink,'_blank')))
+    act.appendChild(mk('🗑',async()=>{if(!confirm('Supprimer ce sténopé ?'))return;await saveAndSync(allEntries.filter(x=>x.id!==e.id))},true))
+    c.appendChild(card)
+  })
+}
+function renderStorageBar(){
+  const sz=new Blob([JSON.stringify(allEntries)]).size
+  document.getElementById('storageBar').textContent=`~${(sz/1024).toFixed(1)} KB · ${allEntries.length} entrées${gToken?' · ✓ Drive':''}`
+}
+function renderAll(){renderList();renderMarkers();renderStorageBar();updateDriveInfo()}
+
+// ── Photos ────────────────────────────────────────────
+document.getElementById('addPhotoBtn').addEventListener('click',()=>document.getElementById('photoInput').click())
+document.getElementById('photoInput').addEventListener('change',async ev=>{
+  for(const f of Array.from(ev.target.files||[])){
+    try{pendingPhotos.push(await compressFile(f,1200,0.75))}catch(e){console.error(e)}
+  }
+  ev.target.value=''; renderPreviews()
+})
+function renderPreviews(){
+  const p=document.getElementById('photosPreview'); p.innerHTML=''
+  pendingPhotos.forEach((d,i)=>{
+    const h=document.createElement('div'); h.className='photo-thumb'
+    const img=document.createElement('img'); img.src=d
+    const del=document.createElement('button'); del.className='del'; del.textContent='×'
+    del.onclick=()=>{pendingPhotos.splice(i,1);renderPreviews()}
+    h.appendChild(img); h.appendChild(del); p.appendChild(h)
+  })
+}
+function compressFile(file,maxWidth=1200,quality=0.75){
+  return new Promise((resolve,reject)=>{
+    const img=new Image(),fr=new FileReader()
+    fr.onload=()=>{img.onload=()=>{
+      let w=img.width,h=img.height
+      if(w>maxWidth){h=Math.round(h*maxWidth/w);w=maxWidth}
+      const c=document.createElement('canvas');c.width=w;c.height=h
+      c.getContext('2d').drawImage(img,0,0,w,h)
+      resolve(c.toDataURL('image/jpeg',quality))
+    };img.onerror=reject;img.src=fr.result};fr.onerror=reject;fr.readAsDataURL(file)
+  })
+}
+async function openFinalUpload(id){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*'
+  inp.onchange=async ev=>{
+    const f=ev.target.files&&ev.target.files[0]; if(!f) return
+    const d=await compressFile(f,1200,0.75)
+    const i=allEntries.findIndex(x=>x.id===id)
+    if(i!==-1){allEntries[i].finalPhotoDataURL=d;await saveAndSync(allEntries);toast('Photo finale enregistrée ✓')}
+  }; inp.click()
+}
+
+// ── Edit modal ────────────────────────────────────────
+let editEntryId = null
+let editPhotos  = []   // copy of photos array being edited
+
+function openEditModal(id){
+  const e = allEntries.find(x=>x.id===id); if(!e) return
+  editEntryId = id
+  editPhotos  = (e.photos||[]).slice()
+
+  // Populate fields
+  const sel = v => o => o.value===String(v)
+  ;[...document.getElementById('editBoxType').options].forEach(o=>o.selected=(o.value===e.boxType))
+  ;[...document.getElementById('editHole').options].forEach(o=>o.selected=(o.value===String(e.holeDiameter_mm)))
+  ;[...document.getElementById('editPaperType').options].forEach(o=>o.selected=(o.value===(e.paperType||'')))
+  document.getElementById('editNotes').value = e.notes||''
+  // orientation
+  if(e.orientationDeg||e.orientation==='libre'){
+    document.getElementById('editOrientationSelect').value = 'libre'
+    document.getElementById('editOrientationDegree').style.display='block'
+    document.getElementById('editOrientationDegree').value = e.orientationDeg||''
+  } else if(e.orientation){
+    document.getElementById('editOrientationSelect').value = e.orientation
+    document.getElementById('editOrientationDegree').style.display='none'
+    document.getElementById('editOrientationDegree').value = ''
+  } else {
+    document.getElementById('editOrientationSelect').value = 'N'
+    document.getElementById('editOrientationDegree').style.display='none'
+    document.getElementById('editOrientationDegree').value = ''
+  }
+
+  renderEditPreviews()
+  document.getElementById('editOverlay').classList.add('open')
+  document.getElementById('editSheet').classList.add('open')
+}
+function closeEditModal(){
+  document.getElementById('editOverlay').classList.remove('open')
+  document.getElementById('editSheet').classList.remove('open')
+  editEntryId=null; editPhotos=[]
+}
+function renderEditPreviews(){
+  const p=document.getElementById('editPhotosPreview'); p.innerHTML=''
+  editPhotos.forEach((d,i)=>{
+    const h=document.createElement('div'); h.className='photo-thumb'
+    const img=document.createElement('img'); img.src=d
+    const del=document.createElement('button'); del.className='del'; del.textContent='×'
+    del.onclick=()=>{editPhotos.splice(i,1);renderEditPreviews()}
+    h.appendChild(img); h.appendChild(del); p.appendChild(h)
+  })
+}
+document.getElementById('editSheetClose').addEventListener('click',closeEditModal)
+document.getElementById('editOverlay').addEventListener('click',closeEditModal)
+document.getElementById('editAddPhotoBtn').addEventListener('click',()=>document.getElementById('editPhotoInput').click())
+document.getElementById('editPhotoInput').addEventListener('change',async ev=>{
+  for(const f of Array.from(ev.target.files||[])){
+    try{editPhotos.push(await compressFile(f,1200,0.75))}catch(e){console.error(e)}
+  }
+  ev.target.value=''; renderEditPreviews()
+})
+document.getElementById('editSaveBtn').addEventListener('click',async()=>{
+  const i = allEntries.findIndex(x=>x.id===editEntryId); if(i===-1) return
+  allEntries[i].photos       = editPhotos.slice()
+  allEntries[i].boxType      = document.getElementById('editBoxType').value
+  allEntries[i].holeDiameter_mm = Number(document.getElementById('editHole').value)
+  allEntries[i].paperType    = document.getElementById('editPaperType').value
+  allEntries[i].notes        = document.getElementById('editNotes').value
+  // orientation
+  const eo = document.getElementById('editOrientationSelect').value
+  if(eo==='libre'){
+    allEntries[i].orientation = 'libre'
+    allEntries[i].orientationDeg = Number(document.getElementById('editOrientationDegree').value) || null
+  } else {
+    allEntries[i].orientation = eo
+    delete allEntries[i].orientationDeg
+  }
+  // If photos changed, clear Drive links for this entry so they re-upload
+  delete allEntries[i].myDrivePhotos
+  closeEditModal()
+  await saveAndSync(allEntries)
+  toast('Modifications enregistrées ✓')
+})
+
+// ── Geoloc ────────────────────────────────────────────
+function startGeoloc(){
+  const el = document.getElementById('geoStatus')
+  if(!el) return
+  if(!navigator.geolocation){
+    el.textContent='📍 Géolocalisation non supportée'; el.className='err'; return
+  }
+  el.textContent='📍 Localisation en cours…'; el.className=''
+  navigator.geolocation.getCurrentPosition(
+    p=>{
+      currentLoc={lat:p.coords.latitude, lng:p.coords.longitude, accuracy:p.coords.accuracy}
+      el.textContent=`📍 ${currentLoc.lat.toFixed(5)}, ${currentLoc.lng.toFixed(5)} (±${Math.round(currentLoc.accuracy)}m)`
+      el.className='ok'
+    },
+    err=>{
+      const msgs={1:'Permission refusée', 2:'Position indisponible', 3:'Délai dépassé'}
+      el.textContent=`📍 Erreur : ${msgs[err.code]||err.message}`
+      el.className='err'
+      // retry once after 3s for timeout/unavailable
+      if(err.code!==1) setTimeout(startGeoloc, 3000)
+    },
+    {enableHighAccuracy:true, timeout:20000, maximumAge:60000}
+  )
+}
+
+// ── Save ──────────────────────────────────────────────
+document.getElementById('saveBtn').addEventListener('click',async()=>{
+  if(!pendingPhotos.length){toast("Ajoute au moins une photo !"); return}
+  const id=Date.now().toString(36)+Math.random().toString(36).slice(2,8)
+  // orientation
+  const oSel = document.getElementById('orientationSelect').value
+  const oDeg = document.getElementById('orientationDegree').value
+  const entry={id,createdAt:Date.now(),photos:pendingPhotos.slice(),location:currentLoc,
+    boxType:document.getElementById('boxType').value,
+    holeDiameter_mm:Number(document.getElementById('hole').value),
+    paperType:document.getElementById('paperType').value,
+    notes:document.getElementById('notes').value,
+    retrievalDate:null,finalPhotoDataURL:null}
+  if(oSel==='libre'){ entry.orientation='libre'; entry.orientationDeg = Number(oDeg) || null }
+  else { entry.orientation = oSel }
+  allEntries.push(entry)
+  await saveAndSync(allEntries)
+  pendingPhotos=[];renderPreviews();document.getElementById('notes').value=''
+  toast('Sténopé enregistré ✓'); startGeoloc()
+})
+
+// ── Export ────────────────────────────────────────────
+document.getElementById('exportJson').addEventListener('click',()=>{
+  const b=new Blob([JSON.stringify(allEntries,null,2)],{type:'application/json'})
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='solar_entries.json';a.click()
+})
+document.getElementById('exportKml').addEventListener('click',()=>{
+  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  const parts=['<?xml version="1.0" encoding="UTF-8"?>','<kml xmlns="http://www.opengis.net/kml/2.2"><Document>']
+  allEntries.filter(e=>e.location).forEach(e=>{
+    parts.push(`<Placemark><name>${esc(new Date(e.createdAt).toLocaleDateString())}</name><description>${esc(e.boxType+' · '+e.holeDiameter_mm+'mm · '+(e.paperType||'')+'\n'+(e.notes||''))}</description><Point><coordinates>${e.location.lng},${e.location.lat},0</coordinates></Point></Placemark>`)
+  })
+  parts.push('</Document></kml>')
+  const b=new Blob([parts.join('\n')],{type:'application/vnd.google-earth.kml+xml'})
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='solar_entries.kml';a.click()
+})
+document.getElementById('clearAll').addEventListener('click',async()=>{
+  if(!confirm('Supprimer TOUS les sténopés ?'))return; await saveAndSync([])
+})
+
+// ── Tabs ──────────────────────────────────────────────
+function switchTab(tabId){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId))
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===tabId))
+  if(tabId==='panelMap')setTimeout(()=>map.invalidateSize(),200)
+}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)))
+
+// ── UI bindings: orientation inputs, filters, sorting ─
+// Orientation show/hide degree input
+const _oSel = document.getElementById('orientationSelect')
+const _oDeg = document.getElementById('orientationDegree')
+if(_oSel && _oDeg){
+  _oSel.addEventListener('change', function(){
+    _oDeg.style.display = this.value==='libre' ? 'block' : 'none'
+    if(this.value!=='libre') _oDeg.value=''
+  })
+}
+const _eSel = document.getElementById('editOrientationSelect')
+const _eDeg = document.getElementById('editOrientationDegree')
+if(_eSel && _eDeg){
+  _eSel.addEventListener('change', function(){
+    _eDeg.style.display = this.value==='libre' ? 'block' : 'none'
+    if(this.value!=='libre') _eDeg.value=''
+  })
+}
+
+// Filters & sort
+function setFilter(f){
+  currentFilter = f
+  document.querySelectorAll('#listControls .filter-btn').forEach(b=>{
+    b.classList.toggle('filter-active', b.dataset.filter===f)
+  })
+  renderList()  // only re-render list, not the full page
+}
+function setSort(s){
+  currentSort = s
+  renderList()
+}
+document.querySelectorAll('#listControls .filter-btn').forEach(b=>{
+  b.addEventListener('click', ()=>setFilter(b.dataset.filter))
+})
+const _sortSel = document.getElementById('sortSelect')
+if(_sortSel) _sortSel.addEventListener('change', ()=>setSort(_sortSel.value))
+// set default visual state immediately (no renderAll call here — async init will render)
+setFilter('all')
+
+// ── Init ──────────────────────────────────────────────
+;(async()=>{
+  startGeoloc()                    // démarre immédiatement, sans attendre l'IDB
+  allEntries = await localLoad()
+  renderAll()
+  // fallback polling si onGoogleLibraryLoad ne se déclenche pas (rare)
+  const waitGsi = setInterval(()=>{
+    if(typeof google !== 'undefined' && google.accounts){ clearInterval(waitGsi); initGoogleAuth() }
+  }, 400)
+  setTimeout(()=>clearInterval(waitGsi), 15000)
+})()
+</script>
+</body>
 </html>
