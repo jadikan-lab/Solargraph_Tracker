@@ -281,6 +281,7 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
       <span id="authStatus" class="d-status">Déconnecté</span>
     </div>
     <button id="authBtn" class="d-btn primary">Connexion Google</button>
+    <button id="switchAccountBtn" class="d-btn outline">🔁 Changer de compte Google</button>
 
     <hr style="border:none;border-top:1px solid #eee">
 
@@ -594,6 +595,10 @@ document.getElementById('authBtn').addEventListener('click',()=>{
     if(window.tokenClient) window.tokenClient.requestAccessToken({prompt:'select_account'})
     else toast('SDK Google non chargé, attends 2s')
   }
+})
+document.getElementById('switchAccountBtn').addEventListener('click',()=>{
+  if(!window.tokenClient){ toast('SDK Google non chargé, attends 2s'); return }
+  window.tokenClient.requestAccessToken({prompt:'select_account'})
 })
 function updateAuthUI(loggedIn){
   document.getElementById('authBtn').textContent = loggedIn ? '🔓 Déconnexion' : '🔐 Connexion Google'
