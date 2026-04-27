@@ -27,6 +27,9 @@ export default function MapView({ entries, onSelect, embed = false }) {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
       className: 'sg-tiles',
+      keepBuffer: 6,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
     }).addTo(mapRef.current)
     layerRef.current = L.layerGroup().addTo(mapRef.current)
     window.mapFlyTo = ({ lat, lng }) => { if (lat && lng) mapRef.current.setView([lat, lng], 16) }
@@ -58,5 +61,5 @@ export default function MapView({ entries, onSelect, embed = false }) {
     }
   }, [entries, onSelect])
 
-  return <div ref={elRef} style={{ height: '100%', width: '100%' }}/>
+  return <div ref={elRef} style={{ height: '100%', width: '100%', touchAction: 'none' }}/>
 }
