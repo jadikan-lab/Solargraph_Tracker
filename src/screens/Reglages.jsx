@@ -151,6 +151,11 @@ export default function Reglages({
                 <a href={driveState.publishFolderLink} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--encre)', textDecoration: 'underline' }}>
                   Ouvrir dossier Solargraph_Tracker
                 </a>
+                {driveState.publishSheetLink && (
+                  <a href={driveState.publishSheetLink} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--encre)', textDecoration: 'underline' }}>
+                    Ouvrir Google Sheet
+                  </a>
+                )}
                 {driveState.lastPublishAt && (
                   <span style={{ fontSize: 12.5, color: 'var(--encre-mute)' }}>
                     publié le {new Date(driveState.lastPublishAt).toLocaleString('fr-FR')}

@@ -5,6 +5,7 @@ const runtime = window.__SG_RUNTIME__ || {}
 const modeKey = runtime.mode || 'default'
 const driveFileName = runtime.driveFileName || 'solargraph_entries_preview.json'
 const lastSyncKey = `solargraph_last_drive_sync_${modeKey}`
+const publishInfoKey = `solargraph_last_drive_publish_${modeKey}`
 
 const listeners = new Set()
 
@@ -13,6 +14,8 @@ let tokenClient = null
 let accessToken = null
 let driveFileId = null
 let pendingAuth = null
+
+const initialPublishInfo = readJson(publishInfoKey) || {}
 
 const state = {
   ready: false,
@@ -23,9 +26,10 @@ const state = {
   name: '',
   error: '',
   lastSyncAt: readNumber(lastSyncKey),
-  lastPublishAt: null,
-  publishFolderId: '',
-  publishFolderLink: '',
+  lastPublishAt: initialPublishInfo.lastPublishAt || null,
+  publishFolderId: initialPublishInfo.publishFolderId || '',
+  publishFolderLink: initialPublishInfo.publishFolderLink || '',
+  publishSheetLink: initialPublishInfo.publishSheetLink || '',
   driveFileName,
 }
 
@@ -46,6 +50,23 @@ function writeNumber(key, value) {
   }
 }
 
+function readJson(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function writeJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Ignore localStorage failures in preview mode.
+  }
+}
+
 function emit() {
   const snapshot = { ...state }
   listeners.forEach((listener) => listener(snapshot))
@@ -59,7 +80,18 @@ function setState(patch) {
 function getErrorMessage(error) {
   if (!error) return 'Erreur inconnue'
   if (typeof error === 'string') return error
+  if (String(error.message || '').includes('403')) {
+    return 'Accès Drive refusé. Reconnecte le compte puis accepte les autorisations demandées.'
+  }
   return error.message || error.error || error.type || 'Erreur inconnue'
+}
+
+function queryLiteral(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function loadGoogleScript() {
@@ -269,23 +301,35 @@ function toCsv(entries) {
 }
 
 async function driveRequestJson(url, init = {}) {
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...(init.headers || {}),
-    },
-  })
-  if (!response.ok) {
+  const maxAttempts = 3
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(init.headers || {}),
+      },
+    })
+
+    if (response.ok) {
+      if (response.status === 204) return {}
+      return response.json()
+    }
+
     const text = await response.text().catch(() => '')
+    const transient = response.status === 429 || response.status >= 500
+    if (transient && attempt < maxAttempts) {
+      await delay(250 * attempt)
+      continue
+    }
     throw new Error(`Drive API ${response.status}: ${text || 'Erreur inconnue'}`)
   }
-  if (response.status === 204) return {}
-  return response.json()
+
+  throw new Error('Drive API indisponible après plusieurs tentatives.')
 }
 
 async function driveFindFolder(name, parentId = 'root') {
-  const query = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`)
+  const query = encodeURIComponent(`name='${queryLiteral(name)}' and mimeType='application/vnd.google-apps.folder' and '${queryLiteral(parentId)}' in parents and trashed=false`)
   const payload = await driveRequestJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`) 
   return payload.files?.[0]?.id || null
 }
@@ -300,8 +344,8 @@ async function driveCreateFolder(name, parentId = 'root') {
 }
 
 async function driveFindFileInFolder(folderId, fileName, mimeType) {
-  let raw = `name='${fileName}' and '${folderId}' in parents and trashed=false`
-  if (mimeType) raw += ` and mimeType='${mimeType}'`
+  let raw = `name='${queryLiteral(fileName)}' and '${queryLiteral(folderId)}' in parents and trashed=false`
+  if (mimeType) raw += ` and mimeType='${queryLiteral(mimeType)}'`
   const query = encodeURIComponent(raw)
   const payload = await driveRequestJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType,webViewLink)`) 
   return payload.files?.[0] || null
@@ -374,16 +418,17 @@ async function uploadCsvAsSheet(folderId, sheetName, csvContent) {
 
 async function uploadImageToFolder(folderId, fileName, dataUrl) {
   const existing = await driveFindFileInFolder(folderId, fileName)
-  if (existing?.id) return existing
+  if (existing?.id) return { file: existing, created: false }
 
   const blob = toDataUrlBlob(dataUrl)
   const form = new FormData()
   form.append('metadata', new Blob([JSON.stringify({ name: fileName, parents: [folderId] })], { type: 'application/json' }))
   form.append('file', blob, fileName)
-  return driveRequestJson('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+  const created = await driveRequestJson('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
     method: 'POST',
     body: form,
   })
+  return { file: created, created: true }
 }
 
 function entryModifiedAt(entry) {
@@ -480,6 +525,7 @@ export async function syncPreviewEntries(localEntries) {
 
 export async function publishPreviewToMyDrive(entries) {
   if (!accessToken) throw new Error('Compte Google non connecté.')
+  if (state.publishing) throw new Error('Une publication est déjà en cours.')
 
   setState({ publishing: true, error: '' })
   try {
@@ -501,13 +547,13 @@ export async function publishPreviewToMyDrive(entries) {
       const photos = Array.isArray(entry.photos) ? entry.photos : []
       for (let i = 0; i < photos.length; i++) {
         if (!photos[i]) continue
-        await uploadImageToFolder(entryFolderId, entryFilename(entry, i, false), photos[i])
-        uploadedPhotos += 1
+        const result = await uploadImageToFolder(entryFolderId, entryFilename(entry, i, false), photos[i])
+        if (result.created) uploadedPhotos += 1
       }
 
       if (entry.finalPhotoDataURL) {
-        await uploadImageToFolder(entryFolderId, entryFilename(entry, -1, true), entry.finalPhotoDataURL)
-        uploadedPhotos += 1
+        const finalResult = await uploadImageToFolder(entryFolderId, entryFilename(entry, -1, true), entry.finalPhotoDataURL)
+        if (finalResult.created) uploadedPhotos += 1
       }
     }
 
@@ -517,11 +563,16 @@ export async function publishPreviewToMyDrive(entries) {
     const sheet = await uploadCsvAsSheet(mainFolderId, 'solargraph_entries_latest_sheet', csvContent)
 
     const now = Date.now()
-    setState({
-      publishing: false,
+    const publishInfo = {
       lastPublishAt: now,
       publishFolderId: mainFolderId,
       publishFolderLink: `https://drive.google.com/drive/folders/${mainFolderId}`,
+      publishSheetLink: sheet?.webViewLink || '',
+    }
+    writeJson(publishInfoKey, publishInfo)
+    setState({
+      publishing: false,
+      ...publishInfo,
       error: '',
     })
 
