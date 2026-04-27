@@ -329,6 +329,7 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
     <button id="publishBtn" class="d-btn success">📤 Publier sur Mon Drive</button>
     <progress id="pubProgress" value="0" max="100"></progress>
     <div id="pubStatus"></div>
+    <button id="cleanupDriveBtn" class="d-btn outline">🧹 Nettoyer Drive (orphelins)</button>
     <button id="resetDriveLinks" class="d-btn outline">🔄 Réinitialiser liens Drive</button>
   </div>
 </div>
@@ -393,6 +394,7 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
       <button class="btn-out filter-btn" data-filter="all" id="filterAll">Tous</button>
       <button class="btn-out filter-btn" data-filter="open" id="filterOpen">En cours</button>
       <button class="btn-out filter-btn" data-filter="retrieved" id="filterRetrieved">Récupérés</button>
+      <button class="btn-out filter-btn" data-filter="trash" id="filterTrash">Corbeille</button>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
       <label style="font-size:0.85rem;color:#666">Trier:</label>
@@ -510,6 +512,8 @@ const DRIVE_SCOPE    = 'https://www.googleapis.com/auth/drive.appdata https://ww
 const DRIVE_FILENAME = 'solargraph_entries.json'
 const IDB_KEY        = 'solar_entries_v3'
 const UPLOAD_CONCURRENCY = 3   // parallel uploads at a time
+const TRASH_RETENTION_DAYS = 14
+const DELETE_QUEUE_KEY = 'solar_delete_queue_v1'
 
 localforage.config({ name: 'solargraph_trk' })
 
@@ -544,6 +548,8 @@ let currentSort = 'date_desc'
 
 function applyFilterSort(entries){
   let out = (entries||[]).slice()
+  if(currentFilter==='trash') out = out.filter(e=>!!e.deletedAt)
+  else out = out.filter(e=>!e.deletedAt)
   // filter
   if(currentFilter==='open') out = out.filter(e=>!e.retrievalDate)
   else if(currentFilter==='retrieved') out = out.filter(e=>!!e.retrievalDate)
@@ -573,6 +579,34 @@ function toast(msg, duration=2500){
 // ── IndexedDB ─────────────────────────────────────────
 async function localLoad(){ try{ return (await localforage.getItem(IDB_KEY))||[] }catch{ return [] } }
 async function localSave(arr){ await localforage.setItem(IDB_KEY, arr) }
+
+function loadDeleteQueue(){
+  try{ return JSON.parse(localStorage.getItem(DELETE_QUEUE_KEY)||'[]')||[] }catch{ return [] }
+}
+function saveDeleteQueue(queue){
+  try{ localStorage.setItem(DELETE_QUEUE_KEY, JSON.stringify(queue||[])) }catch(e){}
+}
+function enqueueDeleteJob(entry){
+  const fileIds = []
+  for(const p of (entry.myDrivePhotos||[])) if(p&&p.fileId) fileIds.push(p.fileId)
+  if(entry.myDriveFinal&&entry.myDriveFinal.fileId) fileIds.push(entry.myDriveFinal.fileId)
+  const queue = loadDeleteQueue()
+  queue.push({
+    entryId: entry.id,
+    folderId: entry.myDriveFolderId || null,
+    fileIds: Array.from(new Set(fileIds)),
+    createdAt: Date.now()
+  })
+  saveDeleteQueue(queue)
+}
+function cancelDeleteJobs(entryId){
+  saveDeleteQueue(loadDeleteQueue().filter(j=>j.entryId!==entryId))
+}
+function purgeExpiredTrashEntries(entries){
+  const maxAge = TRASH_RETENTION_DAYS * 86400000
+  const now = Date.now()
+  return (entries||[]).filter(e=>!(e.deletedAt && (now - Number(e.deletedAt) > maxAge)))
+}
 
 function entryModifiedAt(e){ return Number((e && (e.updatedAt || e.createdAt)) || 0) }
 function mergeEntries(localEntries, driveEntries){
@@ -649,11 +683,13 @@ async function syncFromDrive(){
   }catch(e){console.error('Drive sync:',e)}
 }
 async function saveAndSync(arr){
-  allEntries = arr
-  await localSave(arr)
-  if(gToken){ try{await driveWrite(arr)}catch(e){console.error('driveWrite:',e)} }
+  const normalized = purgeExpiredTrashEntries(arr)
+  allEntries = normalized
+  await localSave(normalized)
+  if(gToken){ try{await driveWrite(normalized)}catch(e){console.error('driveWrite:',e)} }
+  if(gToken){ try{await processDeleteQueue()}catch(e){console.error('deleteQueue:',e)} }
   if(gToken && localStorage.getItem('autoPublish')==='1'){
-    try{await publishEntriesToMyDrive(allEntries)}catch(e){console.error('auto-publish:',e)}
+    try{await publishEntriesToMyDrive(normalized.filter(e=>!e.deletedAt))}catch(e){console.error('auto-publish:',e)}
   }
   renderAll()
 }
@@ -677,7 +713,9 @@ function initGoogleAuth(){
       gToken = resp.access_token
       updateAuthUI(true)
       try{localStorage.setItem('gsi_granted','1')}catch(e){}
-      await syncFromDrive(); renderAll()
+      await syncFromDrive()
+      await processDeleteQueue()
+      renderAll()
     }
   })
 }
@@ -728,6 +766,38 @@ async function driveFindFileInFolder(folderId,filename){
   const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents`)
   const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
   const d = await r.json(); return d.files&&d.files[0]?d.files[0].id:null
+}
+async function driveDeleteFile(fileId){
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`,{
+    method:'DELETE', headers:{Authorization:`Bearer ${gToken}`}
+  })
+  if(!r.ok && r.status!==404) throw new Error('delete_failed_'+r.status)
+}
+async function driveListChildren(folderId){
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`)
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType)`,{headers:{Authorization:`Bearer ${gToken}`}})
+  const d = await r.json()
+  return d.files || []
+}
+async function processDeleteQueue(){
+  if(!gToken) return {processed:0, failed:0}
+  const queue = loadDeleteQueue()
+  if(!queue.length) return {processed:0, failed:0}
+  const keep = []
+  let processed = 0
+  let failed = 0
+  for(const job of queue){
+    try{
+      for(const fid of (job.fileIds||[])) await driveDeleteFile(fid)
+      if(job.folderId) await driveDeleteFile(job.folderId)
+      processed++
+    }catch(e){
+      failed++
+      keep.push(job)
+    }
+  }
+  saveDeleteQueue(keep)
+  return {processed, failed}
 }
 async function uploadDataURLToFolder(dataURL,filename,folderId){
   const binStr = atob(dataURL.split(',')[1])
@@ -780,7 +850,7 @@ async function publishEntriesToMyDrive(entries){
 
   // Build upload tasks, creating subfolders only as needed
   const tasks = []
-  for(const e of entries){
+  for(const e of entries.filter(x=>!x.deletedAt)){
     e.myDrivePhotos = e.myDrivePhotos||[]
     const pendingPhotos = (e.photos||[]).filter((_,i)=>!(e.myDrivePhotos[i]&&e.myDrivePhotos[i].fileId))
     const pendingFinal = e.finalPhotoDataURL&&!(e.myDriveFinal&&e.myDriveFinal.fileId)
@@ -859,9 +929,38 @@ document.getElementById('publishBtn').addEventListener('click',async()=>{
   document.getElementById('pubStatus').textContent = 'Démarrage…'
   document.getElementById('pubProgress').style.display='block'
   try{
-    const r = await publishEntriesToMyDrive(allEntries)
+    await processDeleteQueue()
+    const r = await publishEntriesToMyDrive(allEntries.filter(e=>!e.deletedAt))
     toast(`✓ Publié : ${r.total} photo(s) sur Mon Drive`)
   }catch(e){toast('Erreur: '+(e.message||e)); console.error(e)}
+})
+document.getElementById('cleanupDriveBtn').addEventListener('click',async()=>{
+  if(!gToken){toast('Connecte-toi d\u2019abord à Google.'); return}
+  if(!confirm('Supprimer les dossiers/fichiers orphelins dans Solargraph_Tracker ?')) return
+  try{
+    const mainFolderId = await driveFindFolder('Solargraph_Tracker')
+    if(!mainFolderId){toast('Dossier Solargraph_Tracker introuvable'); return}
+    const children = await driveListChildren(mainFolderId)
+    const keepFolders = new Set(allEntries.filter(e=>!e.deletedAt && e.myDriveFolderId).map(e=>e.myDriveFolderId))
+    const keepFiles = new Set()
+    for(const e of allEntries.filter(x=>!x.deletedAt)){
+      for(const p of (e.myDrivePhotos||[])) if(p&&p.fileId) keepFiles.add(p.fileId)
+      if(e.myDriveFinal&&e.myDriveFinal.fileId) keepFiles.add(e.myDriveFinal.fileId)
+    }
+    let removed = 0
+    for(const c of children){
+      if(c.name===DRIVE_FILENAME) continue
+      if(c.mimeType==='application/vnd.google-apps.folder'){
+        if(!keepFolders.has(c.id)){ await driveDeleteFile(c.id); removed++ }
+      } else {
+        if(!keepFiles.has(c.id)){ await driveDeleteFile(c.id); removed++ }
+      }
+    }
+    toast(`Nettoyage terminé: ${removed} élément(s) supprimé(s)`)
+  }catch(e){
+    console.error(e)
+    toast('Erreur nettoyage Drive')
+  }
 })
 document.getElementById('checkDriveBtn').addEventListener('click',async()=>{
   if(!gToken){toast('Connecte-toi d\u2019abord.'); return}
@@ -1010,13 +1109,42 @@ function renderList(){
       <div class="entry-actions"></div>`
     const act=card.querySelector('.entry-actions')
     const mk=(label,fn,danger)=>{const b=document.createElement('button');b.className='btn-xs'+(danger?' danger':'');b.textContent=label;b.onclick=fn;return b}
-    act.appendChild(mk('🗺 Voir',()=>{switchTab('panelMap');if(e.location)setTimeout(()=>map.setView([e.location.lat,e.location.lng],15),300)}))
-    act.appendChild(mk('✏️ Modifier',()=>openEditModal(e.id)))
-    act.appendChild(mk(e.retrievalDate?'↩ Annuler récup':'✓ Récupéré',async()=>{const i=allEntries.findIndex(x=>x.id===e.id);if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now();allEntries[i].updatedAt=Date.now();await saveAndSync(allEntries)}}))
-    act.appendChild(mk('📷 Photo finale',()=>openFinalUpload(e.id)))
-    if(e.myDrivePhotos&&e.myDrivePhotos[0]&&e.myDrivePhotos[0].webViewLink)
-      act.appendChild(mk('🔗 Drive',()=>window.open(e.myDrivePhotos[0].webViewLink,'_blank')))
-    act.appendChild(mk('🗑',async()=>{if(!confirm('Supprimer ce sténopé ?'))return;await saveAndSync(allEntries.filter(x=>x.id!==e.id))},true))
+    if(e.deletedAt){
+      act.appendChild(mk('♻ Restaurer',async()=>{
+        const i=allEntries.findIndex(x=>x.id===e.id); if(i===-1) return
+        allEntries[i].deletedAt = null
+        allEntries[i].updatedAt = Date.now()
+        cancelDeleteJobs(e.id)
+        await saveAndSync(allEntries)
+      }))
+      act.appendChild(mk('🗑 Définitif',async()=>{
+        if(!confirm('Supprimer définitivement de l\'app ?')) return
+        cancelDeleteJobs(e.id)
+        await saveAndSync(allEntries.filter(x=>x.id!==e.id))
+      },true))
+    } else {
+      act.appendChild(mk('🗺 Voir',()=>{switchTab('panelMap');if(e.location)setTimeout(()=>map.setView([e.location.lat,e.location.lng],15),300)}))
+      act.appendChild(mk('✏️ Modifier',()=>openEditModal(e.id)))
+      act.appendChild(mk(e.retrievalDate?'↩ Annuler récup':'✓ Récupéré',async()=>{const i=allEntries.findIndex(x=>x.id===e.id);if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now();allEntries[i].updatedAt=Date.now();await saveAndSync(allEntries)}}))
+      act.appendChild(mk('📷 Photo finale',()=>openFinalUpload(e.id)))
+      if(e.myDrivePhotos&&e.myDrivePhotos[0]&&e.myDrivePhotos[0].webViewLink)
+        act.appendChild(mk('🔗 Drive',()=>window.open(e.myDrivePhotos[0].webViewLink,'_blank')))
+      act.appendChild(mk('🗑 Corbeille',async()=>{
+        if(!confirm('Envoyer ce sténopé dans la corbeille ?')) return
+        const i=allEntries.findIndex(x=>x.id===e.id); if(i===-1) return
+        allEntries[i].deletedAt = Date.now()
+        allEntries[i].updatedAt = Date.now()
+        await saveAndSync(allEntries)
+      },true))
+      act.appendChild(mk('☁🗑 Suppr partout',async()=>{
+        if(!confirm('Supprimer dans l\'app ET dans Google Drive ?')) return
+        const i=allEntries.findIndex(x=>x.id===e.id); if(i===-1) return
+        allEntries[i].deletedAt = Date.now()
+        allEntries[i].updatedAt = Date.now()
+        enqueueDeleteJob(allEntries[i])
+        await saveAndSync(allEntries)
+      },true))
+    }
     c.appendChild(card)
   })
 }
@@ -1275,7 +1403,8 @@ setFilter('all')
 ;(async()=>{
   populateSelects()                // init selects depuis les réglages stockés
   startGeoloc()                    // démarre immédiatement, sans attendre l'IDB
-  allEntries = await localLoad()
+  allEntries = purgeExpiredTrashEntries(await localLoad())
+  await localSave(allEntries)
   renderAll()
   // fallback polling si onGoogleLibraryLoad ne se déclenche pas (rare)
   const waitGsi = setInterval(()=>{
