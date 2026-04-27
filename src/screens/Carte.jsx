@@ -1,6 +1,18 @@
 import React, { useRef, useState } from 'react'
 import MapView from '../components/MapView.jsx'
-import { Segmented, IconLocate } from '../ui.jsx'
+import { Segmented } from '../ui.jsx'
+
+function CompassRoseIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <circle cx="11" cy="11" r="9" fill="#efe7d4" stroke="#b8ab8e" strokeWidth="1.3"/>
+      <path d="M11 3.6 13.3 10.7 11 12.4 8.7 10.7Z" fill="#6d6048"/>
+      <path d="M11 18.4 8.7 11.3 11 9.6 13.3 11.3Z" fill="#c34f3f"/>
+      <circle cx="11" cy="11" r="1.2" fill="#6d6048"/>
+      <text x="11" y="5.2" textAnchor="middle" fontSize="4.3" fontWeight="700" fill="#6d6048">N</text>
+    </svg>
+  )
+}
 
 export default function Carte({ entries, onSelect }) {
   const VIEW_KEY = 'solargraph_map_view'
@@ -16,9 +28,17 @@ export default function Carte({ entries, onSelect }) {
   const [locError, setLocError] = useState('')
   const mapApiRef = useRef(null)
   const dragYRef = useRef(null)
+  const feedbackTimerRef = useRef(null)
   const enplace = entries.filter((e) => !e.retrievalDate)
   const recup   = entries.filter((e) => e.retrievalDate)
   const filtered = filter === 'enplace' ? enplace : filter === 'recupere' ? recup : entries
+  const geolocatedCount = filtered.filter((e) => e.location?.lat && e.location?.lng).length
+
+  const showFeedback = (message) => {
+    setLocError(message)
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+    feedbackTimerRef.current = setTimeout(() => setLocError(''), 2600)
+  }
 
   React.useEffect(() => {
     try { sessionStorage.setItem(VIEW_KEY, JSON.stringify(view)) } catch {}
@@ -60,7 +80,7 @@ export default function Carte({ entries, onSelect }) {
       <button className="recenter-fab" style={{ bottom: `calc(${typeof sheetH === 'number' ? sheetH + 'px' : sheetH} + 16px)` }}
               aria-label="me recentrer" onClick={() => {
                 if (!navigator.geolocation) {
-                  setLocError('Géolocalisation non disponible')
+                  showFeedback('Géolocalisation non disponible')
                   return
                 }
                 navigator.geolocation.getCurrentPosition(
@@ -68,18 +88,34 @@ export default function Carte({ entries, onSelect }) {
                     setLocError('')
                     mapApiRef.current?.flyTo({ lat: p.coords.latitude, lng: p.coords.longitude, zoom: 16 })
                   },
-                  () => setLocError('Position indisponible'),
+                  () => showFeedback('Position indisponible ou refusée'),
                   { enableHighAccuracy: true, timeout: 10000 }
                 )
               }}>
-        <IconLocate size={20}/>
+        <CompassRoseIcon/>
       </button>
 
       <div style={{ position: 'absolute', right: 12, top: 76, zIndex: 401, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
         <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.zoomIn()} aria-label="Zoom avant">+</button>
         <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.zoomOut()} aria-label="Zoom arrière">−</button>
-        <button className="btn btn-paper" style={{ minHeight: 38, width: 'auto', padding: '0 10px', fontSize: 12, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.fitToEntries()}>
-          Points
+        <button
+          className="btn btn-paper"
+          style={{ minHeight: 38, width: 'auto', padding: '0 10px', fontSize: 12, pointerEvents: 'auto', opacity: geolocatedCount ? 1 : 0.55 }}
+          onClick={() => {
+            if (!mapApiRef.current) {
+              showFeedback('Carte en cours de chargement…')
+              return
+            }
+            if (!geolocatedCount) {
+              showFeedback('Aucun point géolocalisé dans ce filtre')
+              return
+            }
+            mapApiRef.current.fitToEntries()
+            showFeedback(`Cadrage sur ${geolocatedCount} point${geolocatedCount > 1 ? 's' : ''}`)
+          }}
+          aria-label="Cadrer sur les points"
+        >
+          Cadrer
         </button>
       </div>
       {locError && (
