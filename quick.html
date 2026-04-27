@@ -257,6 +257,32 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
 /* ensure legend positioned relative to panel */
 #panelMap{position:relative}
 
+/* ── Locate button ── */
+#locateBtn{
+  position:absolute;bottom:20px;right:10px;z-index:520;
+  width:44px;height:44px;border-radius:50%;
+  background:#fff;border:2px solid var(--border);
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+  font-size:1.3rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;
+}
+#locateBtn:active{background:#f0f0f0}
+
+/* ── Settings panel ── */
+#panelSettings{padding:14px;gap:12px}
+.settings-section{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:8px}
+.settings-section-title{font-size:0.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.settings-item{display:flex;align-items:center;gap:8px;padding:4px 0}
+.settings-item-label{flex:1;font-size:0.95rem}
+.settings-add-row{display:flex;gap:8px;margin-top:2px}
+.settings-add-row input{flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius);font-size:0.95rem}
+.settings-add-row input:focus{outline:none;border-color:var(--blue)}
+.settings-add-btn{padding:10px 16px;background:var(--blue);color:#fff;border:none;border-radius:var(--radius);font-weight:700;cursor:pointer;font-size:1rem}
+.settings-add-btn:active{filter:brightness(.9)}
+.settings-reset{padding:6px 10px;background:none;border:1.5px solid var(--border);border-radius:var(--radius);font-size:0.78rem;color:#888;cursor:pointer;align-self:flex-start}
+.settings-reset:active{filter:brightness(.9)}
+
 </style>
 </head>
 <body>
@@ -318,6 +344,9 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
   <button class="tab" data-tab="panelMap">
     <span class="tab-icon">🗺</span><span class="tab-lbl">Carte</span>
   </button>
+  <button class="tab" data-tab="panelSettings">
+    <span class="tab-icon">⚙️</span><span class="tab-lbl">Réglages</span>
+  </button>
 </div>
 
 <!-- Panel Form -->
@@ -327,23 +356,15 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
   <div id="photosPreview"></div>
   <div class="field">
     <label>Type de boîte</label>
-    <select id="boxType">
-      <option>5x7 can</option>
-      <option>large (5x3.5)</option>
-      <option>small (2.5x3.5)</option>
-      <option>mini</option>
-      <option>custom</option>
-    </select>
+    <select id="boxType"></select>
   </div>
   <div class="field">
     <label>Diamètre trou (mm)</label>
-    <select id="hole"><option>0.26</option><option>0.4</option><option>0.5</option></select>
+    <select id="hole"></select>
   </div>
   <div class="field">
     <label>Type de papier</label>
-    <select id="paperType">
-      <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option><option>random</option>
-    </select>
+    <select id="paperType"></select>
   </div>
   <div class="field">
     <label>Notes</label>
@@ -353,6 +374,7 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
     <label>Orientation</label>
     <div style="display:flex;gap:8px;align-items:center">
       <select id="orientationSelect" style="flex:1">
+        <option value="">— Non renseigné —</option>
         <option>N</option><option>NE</option><option>E</option><option>SE</option>
         <option>S</option><option>SW</option><option>W</option><option>NW</option>
         <option value="libre">Libre (°)</option>
@@ -394,9 +416,41 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
 <!-- Panel Map -->
 <div id="panelMap" class="panel">
   <div id="map"></div>
+  <button id="locateBtn" title="Ma position">📍</button>
   <div id="mapLegend">
     <div class="mapLegendItem"><span class="mapLegendSwatch" style="background:#27ae60"></span> En place</div>
     <div class="mapLegendItem"><span class="mapLegendSwatch" style="background:#e67e22"></span> Récupéré</div>
+  </div>
+</div>
+
+<!-- Panel Settings -->
+<div id="panelSettings" class="panel">
+  <div class="settings-section">
+    <div class="settings-section-title">📦 Types de boîtes</div>
+    <div id="settingsBoxList"></div>
+    <div class="settings-add-row">
+      <input id="settingsBoxInput" type="text" placeholder="Nouveau type de boîte…">
+      <button class="settings-add-btn" id="settingsBoxAdd">+</button>
+    </div>
+    <button class="settings-reset" id="settingsBoxReset">Réinitialiser par défaut</button>
+  </div>
+  <div class="settings-section">
+    <div class="settings-section-title">🔩 Diamètres de trou (mm)</div>
+    <div id="settingsHoleList"></div>
+    <div class="settings-add-row">
+      <input id="settingsHoleInput" type="text" placeholder="Nouveau diamètre…">
+      <button class="settings-add-btn" id="settingsHoleAdd">+</button>
+    </div>
+    <button class="settings-reset" id="settingsHoleReset">Réinitialiser par défaut</button>
+  </div>
+  <div class="settings-section">
+    <div class="settings-section-title">📄 Types de papier</div>
+    <div id="settingsPaperList"></div>
+    <div class="settings-add-row">
+      <input id="settingsPaperInput" type="text" placeholder="Nouveau type de papier…">
+      <button class="settings-add-btn" id="settingsPaperAdd">+</button>
+    </div>
+    <button class="settings-reset" id="settingsPaperReset">Réinitialiser par défaut</button>
   </div>
 </div>
 
@@ -413,28 +467,21 @@ body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);
     <div id="editPhotosPreview"></div>
     <div class="field">
       <label>Type de boîte</label>
-      <select id="editBoxType">
-        <option>5x7 can</option>
-        <option>large (5x3.5)</option>
-        <option>small (2.5x3.5)</option>
-        <option>mini</option>
-        <option>custom</option>
-      </select>
+      <select id="editBoxType"></select>
     </div>
     <div class="field">
       <label>Diamètre trou (mm)</label>
-      <select id="editHole"><option>0.26</option><option>0.4</option><option>0.5</option></select>
+      <select id="editHole"></select>
     </div>
     <div class="field">
       <label>Type de papier</label>
-      <select id="editPaperType">
-        <option>Fomaspeed 311</option><option>RA4 Fujichristal</option><option>Ilford RC</option><option>Ilford FB</option><option>random</option>
-      </select>
+      <select id="editPaperType"></select>
     </div>
     <div class="field">
       <label>Orientation</label>
       <div style="display:flex;gap:8px;align-items:center">
         <select id="editOrientationSelect" style="flex:1">
+          <option value="">— Non renseigné —</option>
           <option>N</option><option>NE</option><option>E</option><option>SE</option>
           <option>S</option><option>SW</option><option>W</option><option>NW</option>
           <option value="libre">Libre (°)</option>
@@ -465,6 +512,25 @@ const IDB_KEY        = 'solar_entries_v3'
 const UPLOAD_CONCURRENCY = 3   // parallel uploads at a time
 
 localforage.config({ name: 'solargraph_trk' })
+
+// ── Settings lists ─────────────────────────────────────
+const DEFAULT_BOX_TYPES = ['5x7 can','large (5x3.5)','small (2.5x3.5)','mini','custom']
+const DEFAULT_HOLES     = ['0.26','0.4','0.5']
+const DEFAULT_PAPERS    = ['Fomaspeed 311','RA4 Fujichristal','Ilford RC','Ilford FB','random']
+function getBoxTypes(){ try{return JSON.parse(localStorage.getItem('solar_box_types'))||DEFAULT_BOX_TYPES}catch{return DEFAULT_BOX_TYPES} }
+function getHoles(){ try{return JSON.parse(localStorage.getItem('solar_holes'))||DEFAULT_HOLES}catch{return DEFAULT_HOLES} }
+function getPapers(){ try{return JSON.parse(localStorage.getItem('solar_papers'))||DEFAULT_PAPERS}catch{return DEFAULT_PAPERS} }
+function saveBoxTypes(arr){ try{localStorage.setItem('solar_box_types',JSON.stringify(arr))}catch(e){} }
+function saveHoles(arr){ try{localStorage.setItem('solar_holes',JSON.stringify(arr))}catch(e){} }
+function savePapers(arr){ try{localStorage.setItem('solar_papers',JSON.stringify(arr))}catch(e){} }
+function populateSelects(){
+  const fill=(sel,items,cur)=>{ sel.innerHTML=items.map(v=>`<option${v===cur?' selected':''}>${v}</option>`).join('') }
+  const bt=getBoxTypes(),ho=getHoles(),pa=getPapers()
+  const bS=document.getElementById('boxType'),hS=document.getElementById('hole'),pS=document.getElementById('paperType')
+  const eBs=document.getElementById('editBoxType'),eHs=document.getElementById('editHole'),ePs=document.getElementById('editPaperType')
+  fill(bS,bt,bS.value); fill(hS,ho,hS.value); fill(pS,pa,pS.value)
+  fill(eBs,bt,eBs.value); fill(eHs,ho,eHs.value); fill(ePs,pa,ePs.value)
+}
 
 let gToken       = null
 let driveFileId  = null
@@ -515,6 +581,12 @@ function entryFilename(e, idx, isFinal=false){
   const dd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
   const suf = isFinal ? 'final' : String(idx)
   return `${dd}_${sanitize(e.boxType)}_${sanitize(e.paperType)}_${sanitize(e.holeDiameter_mm)}_${suf}.jpg`
+}
+function entryFolderName(e, idx){
+  const d = new Date(e.createdAt||Date.now())
+  const dd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const num = String(idx+1).padStart(3,'0')
+  return `${dd}_${num}_${sanitize(e.boxType)}_${sanitize(e.paperType||'')}`
 }
 
 // ── Drive appData (hidden sync) ───────────────────────
@@ -616,15 +688,15 @@ function updateDriveInfo(){
 }
 
 // ── Drive My Drive (visible publish) ─────────────────
-async function driveFindFolder(name){
-  const q = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents`)
+async function driveFindFolder(name, parentId='root'){
+  const q = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents`)
   const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`,{headers:{Authorization:`Bearer ${gToken}`}})
   const d = await r.json(); return d.files&&d.files[0]?d.files[0].id:null
 }
-async function driveCreateFolder(name){
+async function driveCreateFolder(name, parentId='root'){
   const r = await fetch('https://www.googleapis.com/drive/v3/files',{
     method:'POST',headers:{Authorization:`Bearer ${gToken}`,'Content-Type':'application/json'},
-    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:['root']})})
+    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[parentId]})})
   return (await r.json()).id
 }
 async function getFileMeta(id){
@@ -674,27 +746,46 @@ async function uploadJSONToFolder(obj,filename,folderId){
 async function publishEntriesToMyDrive(entries){
   if(!gToken) throw new Error('Not authenticated')
   const folderName = 'Solargraph_Tracker'
-  let folderId = await driveFindFolder(folderName)
-  if(!folderId) folderId = await driveCreateFolder(folderName)
+  let mainFolderId = await driveFindFolder(folderName)
+  if(!mainFolderId) mainFolderId = await driveCreateFolder(folderName)
 
-  // Build flat list of upload tasks
+  // Sort entries by createdAt for stable numbering
+  const sortedByDate = [...entries].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0))
+  const entryIndexMap = new Map(sortedByDate.map((e,i)=>[e.id,i]))
+
+  const progEl = document.getElementById('pubProgress')
+  const statusEl = document.getElementById('pubStatus')
+  if(progEl){ progEl.style.display='block'; progEl.value=0 }
+
+  // Build upload tasks, creating subfolders only as needed
   const tasks = []
   for(const e of entries){
     e.myDrivePhotos = e.myDrivePhotos||[]
-    for(let i=0;i<(e.photos||[]).length;i++){
-      if(e.myDrivePhotos[i]&&e.myDrivePhotos[i].fileId) continue // already uploaded
-      tasks.push({e, i, url:e.photos[i], fname:entryFilename(e,i,false), isFinal:false})
+    const pendingPhotos = (e.photos||[]).filter((_,i)=>!(e.myDrivePhotos[i]&&e.myDrivePhotos[i].fileId))
+    const pendingFinal = e.finalPhotoDataURL&&!(e.myDriveFinal&&e.myDriveFinal.fileId)
+    if(!pendingPhotos.length && !pendingFinal) continue
+
+    if(!e.myDriveFolderId){
+      if(statusEl) statusEl.textContent = 'Création des dossiers…'
+      const idx = entryIndexMap.get(e.id)??0
+      const subName = entryFolderName(e, idx)
+      let subId = await driveFindFolder(subName, mainFolderId)
+      if(!subId) subId = await driveCreateFolder(subName, mainFolderId)
+      e.myDriveFolderId = subId
     }
-    if(e.finalPhotoDataURL&&!(e.myDriveFinal&&e.myDriveFinal.fileId)){
-      tasks.push({e, i:-1, url:e.finalPhotoDataURL, fname:entryFilename(e,-1,true), isFinal:true})
+
+    for(let i=0;i<(e.photos||[]).length;i++){
+      if(e.myDrivePhotos[i]&&e.myDrivePhotos[i].fileId) continue
+      tasks.push({e, i, url:e.photos[i], fname:entryFilename(e,i,false), isFinal:false, folderId:e.myDriveFolderId})
+    }
+    if(pendingFinal){
+      tasks.push({e, i:-1, url:e.finalPhotoDataURL, fname:entryFilename(e,-1,true), isFinal:true, folderId:e.myDriveFolderId})
     }
   }
 
   const total = tasks.length
   let done = 0
-  const progEl = document.getElementById('pubProgress')
-  const statusEl = document.getElementById('pubStatus')
-  if(progEl){ progEl.style.display='block'; progEl.value=0 }
+  if(progEl) progEl.value=0
   const upd = ()=>{
     done++
     if(progEl&&total>0) progEl.value = Math.round((done/total)*100)
@@ -703,13 +794,13 @@ async function publishEntriesToMyDrive(entries){
 
   // Pool: run UPLOAD_CONCURRENCY tasks at a time
   async function runTask(t){
-    const existingId = await driveFindFileInFolder(folderId, t.fname)
+    const existingId = await driveFindFileInFolder(t.folderId, t.fname)
     let result
     if(existingId){
       const m = await getFileMeta(existingId)
       result = { fileId:m.id, name:m.name, webViewLink:m.webViewLink }
     } else {
-      const res = await uploadDataURLToFolder(t.url, t.fname, folderId)
+      const res = await uploadDataURLToFolder(t.url, t.fname, t.folderId)
       if(res&&res.id) result = { fileId:res.id, name:res.name, webViewLink:res.webViewLink }
     }
     if(result){
@@ -726,7 +817,7 @@ async function publishEntriesToMyDrive(entries){
 
   if(total===0 && statusEl) statusEl.textContent = 'Aucune nouvelle photo à publier'
 
-  await uploadJSONToFolder(entries,'solargraph_entries.json',folderId)
+  await uploadJSONToFolder(entries,'solargraph_entries.json',mainFolderId)
   if(statusEl) statusEl.textContent = total>0 ? `✓ ${total} photos publiées` : '✓ Métadonnées mises à jour'
   if(progEl) progEl.value = 100
 
@@ -739,7 +830,7 @@ async function publishEntriesToMyDrive(entries){
     if(statusEl) statusEl.textContent=''
   },3000)
 
-  return {folderId, total}
+  return {folderId: mainFolderId, total}
 }
 
 document.getElementById('publishBtn').addEventListener('click',async()=>{
@@ -763,7 +854,7 @@ document.getElementById('checkDriveBtn').addEventListener('click',async()=>{
 })
 document.getElementById('resetDriveLinks').addEventListener('click',async()=>{
   if(!confirm('Réinitialiser les liens Drive ? Le prochain publish re-uploadera tout.')) return
-  for(const e of allEntries){delete e.myDrivePhotos; delete e.myDriveFinal}
+  for(const e of allEntries){delete e.myDrivePhotos; delete e.myDriveFinal; delete e.myDriveFolderId}
   await saveAndSync(allEntries)
   toast('Liens réinitialisés ✓')
 })
@@ -784,6 +875,54 @@ function closeDrawer(){drawer.classList.remove('open');overlay.classList.remove(
 document.getElementById('gearBtn').addEventListener('click',openDrawer)
 document.getElementById('drawerClose').addEventListener('click',closeDrawer)
 overlay.addEventListener('click',closeDrawer)
+
+// ── Locate button ──────────────────────────────────────────────────
+document.getElementById('locateBtn').addEventListener('click',()=>{
+  if(currentLoc){
+    map.setView([currentLoc.lat,currentLoc.lng],13)
+  } else {
+    toast('Localisation en cours…')
+    navigator.geolocation.getCurrentPosition(
+      p=>{ currentLoc={lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}; map.setView([currentLoc.lat,currentLoc.lng],13) },
+      ()=>toast('Impossible d\'obtenir la position'),
+      {enableHighAccuracy:true,timeout:15000,maximumAge:60000}
+    )
+  }
+})
+
+// ── Settings ─────────────────────────────────────────────────
+function renderSettingsList(listId, items, saveFn){
+  const el=document.getElementById(listId); if(!el) return
+  el.innerHTML=''
+  items.forEach((item,i)=>{
+    const row=document.createElement('div'); row.className='settings-item'
+    const lbl=document.createElement('span'); lbl.className='settings-item-label'; lbl.textContent=item
+    const del=document.createElement('button'); del.className='btn-xs danger'; del.textContent='×'
+    del.onclick=()=>{ items.splice(i,1); saveFn(items); populateSelects(); renderSettingsList(listId,items,saveFn) }
+    row.appendChild(lbl); row.appendChild(del); el.appendChild(row)
+  })
+}
+function renderSettings(){
+  renderSettingsList('settingsBoxList', getBoxTypes(), saveBoxTypes)
+  renderSettingsList('settingsHoleList', getHoles(), saveHoles)
+  renderSettingsList('settingsPaperList', getPapers(), savePapers)
+}
+function addSettingsItem(inputId, getFn, saveFn, listId){
+  const inp=document.getElementById(inputId); if(!inp) return
+  const val=inp.value.trim(); if(!val){ inp.focus(); return }
+  const arr=getFn(); if(arr.includes(val)){toast('Déjà dans la liste'); return}
+  arr.push(val); saveFn(arr); inp.value=''; populateSelects()
+  renderSettingsList(listId, arr, saveFn)
+}
+document.getElementById('settingsBoxAdd').addEventListener('click',()=>addSettingsItem('settingsBoxInput',getBoxTypes,saveBoxTypes,'settingsBoxList'))
+document.getElementById('settingsHoleAdd').addEventListener('click',()=>addSettingsItem('settingsHoleInput',getHoles,saveHoles,'settingsHoleList'))
+document.getElementById('settingsPaperAdd').addEventListener('click',()=>addSettingsItem('settingsPaperInput',getPapers,savePapers,'settingsPaperList'))
+document.getElementById('settingsBoxReset').addEventListener('click',()=>{ saveBoxTypes(DEFAULT_BOX_TYPES.slice()); populateSelects(); renderSettings(); toast('Boîtes réinitialisées') })
+document.getElementById('settingsHoleReset').addEventListener('click',()=>{ saveHoles(DEFAULT_HOLES.slice()); populateSelects(); renderSettings(); toast('Diamètres réinitialisés') })
+document.getElementById('settingsPaperReset').addEventListener('click',()=>{ savePapers(DEFAULT_PAPERS.slice()); populateSelects(); renderSettings(); toast('Papiers réinitialisés') })
+document.getElementById('settingsBoxInput').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('settingsBoxAdd').click() })
+document.getElementById('settingsHoleInput').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('settingsHoleAdd').click() })
+document.getElementById('settingsPaperInput').addEventListener('keydown',e=>{ if(e.key==='Enter') document.getElementById('settingsPaperAdd').click() })
 
 // ── Map ───────────────────────────────────────────────
 const map = L.map('map').setView([46,2],5)
@@ -931,7 +1070,7 @@ function openEditModal(id){
     document.getElementById('editOrientationDegree').style.display='none'
     document.getElementById('editOrientationDegree').value = ''
   } else {
-    document.getElementById('editOrientationSelect').value = 'N'
+    document.getElementById('editOrientationSelect').value = ''
     document.getElementById('editOrientationDegree').style.display='none'
     document.getElementById('editOrientationDegree').value = ''
   }
@@ -976,6 +1115,9 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
   if(eo==='libre'){
     allEntries[i].orientation = 'libre'
     allEntries[i].orientationDeg = Number(document.getElementById('editOrientationDegree').value) || null
+  } else if(eo==='') {
+    allEntries[i].orientation = null
+    delete allEntries[i].orientationDeg
   } else {
     allEntries[i].orientation = eo
     delete allEntries[i].orientationDeg
@@ -1026,6 +1168,7 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
     notes:document.getElementById('notes').value,
     retrievalDate:null,finalPhotoDataURL:null}
   if(oSel==='libre'){ entry.orientation='libre'; entry.orientationDeg = Number(oDeg) || null }
+  else if(oSel==='') { entry.orientation = null }
   else { entry.orientation = oSel }
   allEntries.push(entry)
   await saveAndSync(allEntries)
@@ -1056,7 +1199,13 @@ document.getElementById('clearAll').addEventListener('click',async()=>{
 function switchTab(tabId){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId))
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===tabId))
-  if(tabId==='panelMap')setTimeout(()=>map.invalidateSize(),200)
+  if(tabId==='panelMap'){
+    setTimeout(()=>{
+      map.invalidateSize()
+      if(currentLoc) map.setView([currentLoc.lat,currentLoc.lng],13)
+    },200)
+  }
+  if(tabId==='panelSettings') renderSettings()
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)))
 
@@ -1101,6 +1250,7 @@ setFilter('all')
 
 // ── Init ──────────────────────────────────────────────
 ;(async()=>{
+  populateSelects()                // init selects depuis les réglages stockés
   startGeoloc()                    // démarre immédiatement, sans attendre l'IDB
   allEntries = await localLoad()
   renderAll()
