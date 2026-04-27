@@ -21,6 +21,8 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
   const layerRef = useRef(null)
   const elRef = useRef(null)
   const lastEntriesRef = useRef([])
+  const userMarkerRef = useRef(null)
+  const userAccuracyRef = useRef(null)
 
   useEffect(() => {
     if (mapRef.current) return
@@ -65,6 +67,36 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
     if (mapApiRef) {
       mapApiRef.current = {
         flyTo: ({ lat, lng, zoom = 16 }) => { if (lat && lng) mapRef.current.setView([lat, lng], zoom) },
+        showUserLocation: ({ lat, lng, accuracy }) => {
+          if (!lat || !lng) return
+          if (!userMarkerRef.current) {
+            userMarkerRef.current = L.circleMarker([lat, lng], {
+              radius: 7,
+              color: '#1f5de0',
+              weight: 2,
+              fillColor: '#2f7bff',
+              fillOpacity: 0.95,
+            }).addTo(mapRef.current)
+          } else {
+            userMarkerRef.current.setLatLng([lat, lng])
+          }
+
+          const safeAccuracy = Number.isFinite(Number(accuracy)) ? Math.max(8, Number(accuracy)) : 24
+          if (!userAccuracyRef.current) {
+            userAccuracyRef.current = L.circle([lat, lng], {
+              radius: safeAccuracy,
+              color: '#2f7bff',
+              weight: 1,
+              fillColor: '#2f7bff',
+              fillOpacity: 0.12,
+            }).addTo(mapRef.current)
+          } else {
+            userAccuracyRef.current.setLatLng([lat, lng])
+            userAccuracyRef.current.setRadius(safeAccuracy)
+          }
+
+          mapRef.current.setView([lat, lng], Math.max(15, mapRef.current.getZoom()))
+        },
         zoomIn: () => mapRef.current.zoomIn(),
         zoomOut: () => mapRef.current.zoomOut(),
         fitToEntries,
@@ -88,7 +120,7 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
       const marker = L.marker([e.location.lat, e.location.lng], { icon: makeIcon(status) })
       const popup = L.popup({ maxWidth: 260 }).setContent(
         `<div class="popup">
-          <div class="name">${e.name || 'Sans nom'}</div>
+          <div class="name">${(e.name && e.name.trim()) || 'Sténopé'}</div>
           <div style="font-size:12px;color:#6b6253;margin-top:4px;">${e.boxType || '—'} · Ø${e.holeDiameter_mm} mm</div>
           ${photo ? `<img src="${photo}" style="max-width:240px;max-height:140px;display:block;margin-top:8px;"/>` : ''}
         </div>`

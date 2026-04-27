@@ -56,7 +56,7 @@ export default function Liste({ entries, onSelect }) {
                 </div>
                 <div className="thumb-body">
                   <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontWeight: 500, fontSize: 16, lineHeight: 1.1 }}>
-                    {e.name || 'Sans nom'}
+                    {(e.name && e.name.trim()) || 'Sténopé'}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--encre-mute)', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
                     j+{days(e)} · {e.boxType || '—'} · Ø{e.holeDiameter_mm} · {e.paperType || 'papier —'}

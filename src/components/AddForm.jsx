@@ -118,7 +118,7 @@ export default function AddForm({ onAdd, onDone }) {
     if (!photos.length) return alert('Ajoute la photo principale')
     setBusy(true)
     const entry = {
-      name: name || 'Sans nom',
+      name: name.trim(),
       initialPhotoDataURL: photos[0] || null,
       secondaryPhotoDataURL: photos[1] || null,
       photos: photos.slice(),

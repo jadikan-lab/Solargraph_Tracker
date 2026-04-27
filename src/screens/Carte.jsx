@@ -32,7 +32,6 @@ export default function Carte({ entries, onSelect }) {
   const enplace = entries.filter((e) => !e.retrievalDate)
   const recup   = entries.filter((e) => e.retrievalDate)
   const filtered = filter === 'enplace' ? enplace : filter === 'recupere' ? recup : entries
-  const geolocatedCount = filtered.filter((e) => e.location?.lat && e.location?.lng).length
 
   const showFeedback = (message) => {
     setLocError(message)
@@ -86,7 +85,11 @@ export default function Carte({ entries, onSelect }) {
                 navigator.geolocation.getCurrentPosition(
                   (p) => {
                     setLocError('')
-                    mapApiRef.current?.flyTo({ lat: p.coords.latitude, lng: p.coords.longitude, zoom: 16 })
+                    mapApiRef.current?.showUserLocation({
+                      lat: p.coords.latitude,
+                      lng: p.coords.longitude,
+                      accuracy: p.coords.accuracy,
+                    })
                   },
                   () => showFeedback('Position indisponible ou refusée'),
                   { enableHighAccuracy: true, timeout: 10000 }
@@ -98,25 +101,6 @@ export default function Carte({ entries, onSelect }) {
       <div style={{ position: 'absolute', right: 12, top: 76, zIndex: 401, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
         <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.zoomIn()} aria-label="Zoom avant">+</button>
         <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.zoomOut()} aria-label="Zoom arrière">−</button>
-        <button
-          className="btn btn-paper"
-          style={{ minHeight: 38, width: 'auto', padding: '0 10px', fontSize: 12, pointerEvents: 'auto', opacity: geolocatedCount ? 1 : 0.55 }}
-          onClick={() => {
-            if (!mapApiRef.current) {
-              showFeedback('Carte en cours de chargement…')
-              return
-            }
-            if (!geolocatedCount) {
-              showFeedback('Aucun point géolocalisé dans ce filtre')
-              return
-            }
-            mapApiRef.current.fitToEntries()
-            showFeedback(`Cadrage sur ${geolocatedCount} point${geolocatedCount > 1 ? 's' : ''}`)
-          }}
-          aria-label="Cadrer sur les points"
-        >
-          Cadrer
-        </button>
       </div>
       {locError && (
         <div style={{ position: 'absolute', left: 12, right: 12, top: 76, zIndex: 401, textAlign: 'center', fontSize: 12, color: 'var(--alerte-deep)', pointerEvents: 'none' }}>
@@ -167,7 +151,7 @@ function RowItem({ e, onSelect }) {
         ? <img src={photo} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flex: 'none' }}/>
         : <div className="photo-ph" style={{ width: 44, height: 44, flex: 'none' }}/>}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="name">{e.name || 'Sans nom'}</div>
+        <div className="name">{(e.name && e.name.trim()) || 'Sténopé'}</div>
         <div className="meta">j+{days} · {e.boxType || '—'} · Ø{e.holeDiameter_mm}</div>
       </div>
       <span style={{ width: 10, height: 10, borderRadius: 999, background: status === 'enplace' ? 'var(--soleil)' : 'var(--recupere)' }}/>
