@@ -32,8 +32,8 @@ export default function Carte({ entries, onSelect }) {
       </div>
 
       {/* Top filter */}
-      <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', justifyContent: 'center', zIndex: 401 }}>
-        <div style={{ background: 'rgba(246,241,231,0.92)', backdropFilter: 'blur(8px)', borderRadius: 999, border: '1px solid var(--papier-edge)', padding: 3, boxShadow: 'var(--shadow-sm)' }}>
+      <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', justifyContent: 'center', zIndex: 401, pointerEvents: 'none' }}>
+        <div style={{ background: 'rgba(246,241,231,0.92)', backdropFilter: 'blur(8px)', borderRadius: 999, border: '1px solid var(--papier-edge)', padding: 3, boxShadow: 'var(--shadow-sm)', pointerEvents: 'auto' }}>
           <Segmented value={filter} onChange={setFilter} items={[
             { value: 'tous',     label: 'Tous',      count: entries.length },
             { value: 'enplace',  label: 'En place',  count: enplace.length, dot: 'var(--soleil)' },
@@ -61,15 +61,15 @@ export default function Carte({ entries, onSelect }) {
         <IconLocate size={20}/>
       </button>
 
-      <div style={{ position: 'absolute', right: 12, top: 76, zIndex: 401, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0 }} onClick={() => mapApiRef.current?.zoomIn()} aria-label="Zoom avant">+</button>
-        <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0 }} onClick={() => mapApiRef.current?.zoomOut()} aria-label="Zoom arrière">−</button>
-        <button className="btn btn-paper" style={{ minHeight: 38, width: 'auto', padding: '0 10px', fontSize: 12 }} onClick={() => mapApiRef.current?.fitToEntries()}>
+      <div style={{ position: 'absolute', right: 12, top: 76, zIndex: 401, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
+        <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.zoomIn()} aria-label="Zoom avant">+</button>
+        <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.zoomOut()} aria-label="Zoom arrière">−</button>
+        <button className="btn btn-paper" style={{ minHeight: 38, width: 'auto', padding: '0 10px', fontSize: 12, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.fitToEntries()}>
           Points
         </button>
       </div>
       {locError && (
-        <div style={{ position: 'absolute', left: 12, right: 12, top: 76, zIndex: 401, textAlign: 'center', fontSize: 12, color: 'var(--alerte-deep)' }}>
+        <div style={{ position: 'absolute', left: 12, right: 12, top: 76, zIndex: 401, textAlign: 'center', fontSize: 12, color: 'var(--alerte-deep)', pointerEvents: 'none' }}>
           {locError}
         </div>
       )}

@@ -16,7 +16,7 @@ function mainPhoto(e) {
   return e.initialPhotoDataURL || e.photos?.[0] || null
 }
 
-export default function MapView({ entries, onSelect, embed = false, initialView, onViewChange, mapApiRef }) {
+export default function MapView({ entries, onSelect, embed = false, initialView, onViewChange, mapApiRef, zoomControl = false }) {
   const mapRef = useRef(null)
   const layerRef = useRef(null)
   const elRef = useRef(null)
@@ -26,7 +26,19 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
     if (mapRef.current) return
     const startCenter = Array.isArray(initialView?.center) ? initialView.center : [48.8566, 2.3522]
     const startZoom = Number.isFinite(initialView?.zoom) ? initialView.zoom : 13
-    mapRef.current = L.map(elRef.current, { center: startCenter, zoom: startZoom, zoomControl: !embed })
+    mapRef.current = L.map(elRef.current, {
+      center: startCenter,
+      zoom: startZoom,
+      zoomControl,
+      touchZoom: true,
+      inertia: true,
+      inertiaDeceleration: 3000,
+      inertiaMaxSpeed: 2200,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      tap: false,
+      keyboard: false,
+    })
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
       className: 'sg-tiles',
@@ -92,5 +104,5 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
     }
   }, [entries, onSelect])
 
-  return <div ref={elRef} style={{ height: '100%', width: '100%', touchAction: 'none' }}/>
+  return <div ref={elRef} style={{ height: '100%', width: '100%', touchAction: 'pan-x pan-y pinch-zoom' }}/>
 }
