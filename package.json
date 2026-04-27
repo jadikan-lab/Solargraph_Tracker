@@ -8,11 +8,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "browser-image-compression": "^1.0.17",
     "leaflet": "^1.9.4",
     "localforage": "^1.10.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "browser-image-compression": "^1.0.17"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "vite": "^5.0.0"
