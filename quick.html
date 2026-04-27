@@ -586,9 +586,6 @@ function initGoogleAuth(){
       await syncFromDrive(); renderAll()
     }
   })
-  try{
-    if(localStorage.getItem('gsi_granted')) window.tokenClient.requestAccessToken({prompt:''})
-  }catch(e){console.warn('silent token:',e)}
 }
 document.getElementById('authBtn').addEventListener('click',()=>{
   if(gToken){
