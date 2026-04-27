@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import 'leaflet/dist/leaflet.css'
 import db from './db'
 import { TabBar, Toast } from './ui.jsx'
@@ -43,6 +43,11 @@ export default function App() {
   const [csvArchiveCount, setCsvArchiveCount] = useState(() => readNumberStorage(CSV_EXPORT_COUNTER_KEY, 0))
   const [csvLastExportAt, setCsvLastExportAt] = useState(() => readNumberStorage(CSV_EXPORT_LAST_AT_KEY, 0))
   const visibleEntries = entries.filter((entry) => !entry.deletedAt)
+  const tabRef = useRef(tab)
+  const selectedRef = useRef(selected)
+
+  useEffect(() => { tabRef.current = tab }, [tab])
+  useEffect(() => { selectedRef.current = selected }, [selected])
 
   useEffect(() => {
     const load = async () => setEntries(await db.getEntries())
@@ -59,6 +64,28 @@ export default function App() {
     initPreviewDrive()
     return subscribePreviewDrive(setDriveState)
   }, [isPreview])
+
+  useEffect(() => {
+    // Keep back button inside the SPA: close detail -> go to list -> stay in app.
+    if (!window.history.state?.sgApp) {
+      window.history.replaceState({ sgApp: true }, '')
+    }
+    window.history.pushState({ sgApp: true }, '')
+
+    const onPopState = () => {
+      if (selectedRef.current) {
+        setSelected(null)
+      } else if (tabRef.current !== 'liste') {
+        setTab('liste')
+      } else {
+        setToast({ kind: 'info', msg: 'Utilise le menu navigateur pour quitter.' })
+      }
+      window.history.pushState({ sgApp: true }, '')
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   const refresh = async () => setEntries(await db.getEntries())
 

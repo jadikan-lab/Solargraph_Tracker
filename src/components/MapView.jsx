@@ -16,14 +16,17 @@ function mainPhoto(e) {
   return e.initialPhotoDataURL || e.photos?.[0] || null
 }
 
-export default function MapView({ entries, onSelect, embed = false }) {
+export default function MapView({ entries, onSelect, embed = false, initialView, onViewChange, mapApiRef }) {
   const mapRef = useRef(null)
   const layerRef = useRef(null)
   const elRef = useRef(null)
+  const lastEntriesRef = useRef([])
 
   useEffect(() => {
     if (mapRef.current) return
-    mapRef.current = L.map(elRef.current, { center: [48.8566, 2.3522], zoom: 13, zoomControl: !embed })
+    const startCenter = Array.isArray(initialView?.center) ? initialView.center : [48.8566, 2.3522]
+    const startZoom = Number.isFinite(initialView?.zoom) ? initialView.zoom : 13
+    mapRef.current = L.map(elRef.current, { center: startCenter, zoom: startZoom, zoomControl: !embed })
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
       className: 'sg-tiles',
@@ -32,12 +35,40 @@ export default function MapView({ entries, onSelect, embed = false }) {
       updateWhenZooming: false,
     }).addTo(mapRef.current)
     layerRef.current = L.layerGroup().addTo(mapRef.current)
-    window.mapFlyTo = ({ lat, lng }) => { if (lat && lng) mapRef.current.setView([lat, lng], 16) }
-  }, [embed])
+
+    const emitView = () => {
+      if (!onViewChange) return
+      const c = mapRef.current.getCenter()
+      onViewChange({ center: [c.lat, c.lng], zoom: mapRef.current.getZoom() })
+    }
+    mapRef.current.on('moveend zoomend', emitView)
+
+    const fitToEntries = () => {
+      const valid = lastEntriesRef.current.filter((e) => e.location?.lat && e.location?.lng)
+      if (!valid.length) return
+      const bounds = L.latLngBounds(valid.map((e) => [e.location.lat, e.location.lng]))
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
+    }
+
+    if (mapApiRef) {
+      mapApiRef.current = {
+        flyTo: ({ lat, lng, zoom = 16 }) => { if (lat && lng) mapRef.current.setView([lat, lng], zoom) },
+        zoomIn: () => mapRef.current.zoomIn(),
+        zoomOut: () => mapRef.current.zoomOut(),
+        fitToEntries,
+      }
+    }
+
+    return () => {
+      mapRef.current?.off('moveend zoomend', emitView)
+      if (mapApiRef) mapApiRef.current = null
+    }
+  }, [embed, initialView, mapApiRef, onViewChange])
 
   useEffect(() => {
     if (!layerRef.current) return
     layerRef.current.clearLayers()
+    lastEntriesRef.current = entries
     const valid = entries.filter((e) => e.location?.lat && e.location?.lng)
     valid.forEach((e) => {
       const status = e.retrievalDate ? 'recupere' : 'enplace'

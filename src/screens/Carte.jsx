@@ -1,20 +1,34 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import MapView from '../components/MapView.jsx'
 import { Segmented, IconLocate } from '../ui.jsx'
 
 export default function Carte({ entries, onSelect }) {
+  const VIEW_KEY = 'solargraph_map_view'
   const [filter, setFilter] = useState('tous')
   const [sheet, setSheet] = useState('peek')   // peek | full
+  const [view, setView] = useState(() => {
+    try {
+      const raw = JSON.parse(sessionStorage.getItem(VIEW_KEY) || 'null')
+      if (Array.isArray(raw?.center) && Number.isFinite(raw?.zoom)) return raw
+    } catch {}
+    return { center: [48.8566, 2.3522], zoom: 13 }
+  })
+  const [locError, setLocError] = useState('')
+  const mapApiRef = useRef(null)
   const enplace = entries.filter((e) => !e.retrievalDate)
   const recup   = entries.filter((e) => e.retrievalDate)
   const filtered = filter === 'enplace' ? enplace : filter === 'recupere' ? recup : entries
+
+  React.useEffect(() => {
+    try { sessionStorage.setItem(VIEW_KEY, JSON.stringify(view)) } catch {}
+  }, [view])
 
   const sheetH = sheet === 'full' ? '60dvh' : 168
 
   return (
     <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', inset: 0 }}>
-        <MapView entries={filtered} onSelect={onSelect}/>
+        <MapView entries={filtered} onSelect={onSelect} initialView={view} onViewChange={setView} mapApiRef={mapApiRef}/>
       </div>
 
       {/* Top filter */}
@@ -30,9 +44,35 @@ export default function Carte({ entries, onSelect }) {
 
       {/* Recenter */}
       <button className="recenter-fab" style={{ bottom: `calc(${typeof sheetH === 'number' ? sheetH + 'px' : sheetH} + 16px)` }}
-              aria-label="me recentrer" onClick={() => navigator.geolocation?.getCurrentPosition((p) => window.mapFlyTo?.({ lat: p.coords.latitude, lng: p.coords.longitude }))}>
+              aria-label="me recentrer" onClick={() => {
+                if (!navigator.geolocation) {
+                  setLocError('Géolocalisation non disponible')
+                  return
+                }
+                navigator.geolocation.getCurrentPosition(
+                  (p) => {
+                    setLocError('')
+                    mapApiRef.current?.flyTo({ lat: p.coords.latitude, lng: p.coords.longitude, zoom: 16 })
+                  },
+                  () => setLocError('Position indisponible'),
+                  { enableHighAccuracy: true, timeout: 10000 }
+                )
+              }}>
         <IconLocate size={20}/>
       </button>
+
+      <div style={{ position: 'absolute', right: 12, top: 76, zIndex: 401, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0 }} onClick={() => mapApiRef.current?.zoomIn()} aria-label="Zoom avant">+</button>
+        <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0 }} onClick={() => mapApiRef.current?.zoomOut()} aria-label="Zoom arrière">−</button>
+        <button className="btn btn-paper" style={{ minHeight: 38, width: 'auto', padding: '0 10px', fontSize: 12 }} onClick={() => mapApiRef.current?.fitToEntries()}>
+          Points
+        </button>
+      </div>
+      {locError && (
+        <div style={{ position: 'absolute', left: 12, right: 12, top: 76, zIndex: 401, textAlign: 'center', fontSize: 12, color: 'var(--alerte-deep)' }}>
+          {locError}
+        </div>
+      )}
 
       {/* Bottom sheet */}
       <div className="sheet" style={{ height: sheetH }}>
