@@ -128,6 +128,7 @@ function EditView({ entry, onBack, onUpdate }) {
   const [paperType, setPaperType] = useState(entry.paperType || paperTypes[0])
   const [orientation, setOrientation] = useState(entry.orientation || 'SO')
   const [notes, setNotes] = useState(entry.notes || '')
+  const [retrieved, setRetrieved] = useState(!!entry.retrievalDate)
   const [lat, setLat] = useState(entry.location?.lat != null ? String(entry.location.lat) : '')
   const [lng, setLng] = useState(entry.location?.lng != null ? String(entry.location.lng) : '')
   const [accuracy, setAccuracy] = useState(entry.location?.accuracy != null ? String(entry.location.accuracy) : '')
@@ -180,6 +181,15 @@ function EditView({ entry, onBack, onUpdate }) {
         }
       }
 
+      const statusPatch = {}
+      if (retrieved && !entry.retrievalDate) {
+        statusPatch.retrievalDate = Date.now()
+      } else if (!retrieved && entry.retrievalDate) {
+        statusPatch.retrievalDate = null
+        statusPatch.finalPhotoDataURL = null
+        statusPatch.retrievalNote = null
+      }
+
       await onUpdate(entry.id, {
         name: name.trim() || 'Sans nom',
         boxType,
@@ -188,6 +198,7 @@ function EditView({ entry, onBack, onUpdate }) {
         orientation,
         notes,
         location,
+        ...statusPatch,
       })
       onBack()
     } finally {
@@ -243,6 +254,29 @@ function EditView({ entry, onBack, onUpdate }) {
 
       <Field label="Notes terrain">
         <textarea className="textarea" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes, support, contexte…"/>
+      </Field>
+
+      <Field label="Statut de récupération">
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Chip active={!retrieved} onClick={() => setRetrieved(false)}
+                style={{ cursor: 'pointer', flex: 1, justifyContent: 'center', padding: '10px 0',
+                  background: !retrieved ? 'var(--papier-2)' : undefined,
+                  borderColor: !retrieved ? 'var(--encre)' : undefined }}>
+            En pose
+          </Chip>
+          <Chip active={retrieved} onClick={() => setRetrieved(true)}
+                style={{ cursor: 'pointer', flex: 1, justifyContent: 'center', padding: '10px 0',
+                  background: retrieved ? '#d8e7d6' : undefined,
+                  borderColor: retrieved ? '#88a78c' : undefined,
+                  color: retrieved ? '#274a31' : undefined }}>
+            Récupéré
+          </Chip>
+        </div>
+        {!retrieved && entry.retrievalDate && (
+          <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--alerte-deep)' }}>
+            La date de récupération et la photo seront effacées.
+          </div>
+        )}
       </Field>
 
       <Card flat>
