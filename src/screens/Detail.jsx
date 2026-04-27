@@ -103,6 +103,12 @@ function DetailView({ entry, onBack, onUpdate, onDelete, onEdit, onRecuperer }) 
         {!entry.retrievalDate && (
           <Btn kind="success" style={{ flex: 1 }} icon={<IconCheck size={18}/>} onClick={onRecuperer}>Récupérer</Btn>
         )}
+        {entry.retrievalDate && (
+          <Btn kind="paper" style={{ flex: 1 }} icon={<IconRefresh size={16}/>}
+               onClick={() => { if (confirm('Remettre ce sténopé en pose ? La date de récupération et la photo seront effacées, la date de pose est conservée.')) onUpdate(entry.id, { retrievalDate: null, finalPhotoDataURL: null, retrievalNote: null }) }}>
+            Remettre en pose
+          </Btn>
+        )}
         <Btn kind="ghost" style={{ width: 44, padding: 0, color: 'var(--alerte-deep)' }} aria-label="supprimer"
              onClick={() => { if (confirm('Envoyer ce sténopé dans la corbeille partagée ? (suppression définitive différée)')) onDelete?.(entry.id) }}>
           <IconTrash size={18}/>
