@@ -29,7 +29,7 @@ export default function AddForm({ onAdd, onDone }) {
   const [boxType, setBoxType] = useState(() => readList('solar_box_types', DEFAULT_BOX_TYPES)[0])
   const [holeDiameter, setHoleDiameter] = useState(() => toNumber(readList('solar_holes', DEFAULT_HOLES)[0], 0.26))
   const [paperType, setPaperType] = useState(() => readList('solar_papers', DEFAULT_PAPERS)[0])
-  const [orientation, setOrientation] = useState('SO')
+  const [orientation, setOrientation] = useState('')
   const [name, setName] = useState('')
   const [loc, setLoc] = useState(null)
   const [geoError, setGeoError] = useState('')

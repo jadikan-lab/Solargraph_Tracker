@@ -126,7 +126,7 @@ function EditView({ entry, onBack, onUpdate }) {
   const [boxType, setBoxType] = useState(entry.boxType || boxTypes[0])
   const [holeDiameter, setHoleDiameter] = useState(toNumber(entry.holeDiameter_mm, toNumber(holeSizes[0], 0.26)))
   const [paperType, setPaperType] = useState(entry.paperType || paperTypes[0])
-  const [orientation, setOrientation] = useState(entry.orientation || 'SO')
+  const [orientation, setOrientation] = useState(entry.orientation || '')
   const [notes, setNotes] = useState(entry.notes || '')
   const [retrieved, setRetrieved] = useState(!!entry.retrievalDate)
   const [lat, setLat] = useState(entry.location?.lat != null ? String(entry.location.lat) : '')
