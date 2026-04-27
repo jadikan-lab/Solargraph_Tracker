@@ -16,16 +16,29 @@ import {
   syncPreviewEntries,
 } from './previewDrive'
 
+const CSV_EXPORT_COUNTER_KEY = 'solargraph_csv_export_counter'
+const CSV_EXPORT_LAST_AT_KEY = 'solargraph_csv_export_last_at'
+
+function readNumberStorage(key, fallback = 0) {
+  try {
+    const value = Number(localStorage.getItem(key) || String(fallback))
+    return Number.isFinite(value) ? value : fallback
+  } catch {
+    return fallback
+  }
+}
+
 export default function App() {
   const runtime = window.__SG_RUNTIME__ || {}
   const isPreview = runtime.preview === true
-  const CSV_EXPORT_COUNTER_KEY = 'solargraph_csv_export_counter'
   const [entries, setEntries] = useState([])
   const [tab, setTab] = useState('liste')
   const [selected, setSelected] = useState(null)
   const [toast, setToast] = useState(null)
   const [online, setOnline] = useState(navigator.onLine)
   const [driveState, setDriveState] = useState(getPreviewDriveState())
+  const [csvArchiveCount, setCsvArchiveCount] = useState(() => readNumberStorage(CSV_EXPORT_COUNTER_KEY, 0))
+  const [csvLastExportAt, setCsvLastExportAt] = useState(() => readNumberStorage(CSV_EXPORT_LAST_AT_KEY, 0))
   const visibleEntries = entries.filter((entry) => !entry.deletedAt)
 
   useEffect(() => {
@@ -158,6 +171,8 @@ export default function App() {
     const previous = Number(localStorage.getItem(CSV_EXPORT_COUNTER_KEY) || '0')
     const next = Number.isFinite(previous) ? previous + 1 : 1
     localStorage.setItem(CSV_EXPORT_COUNTER_KEY, String(next))
+    const exportedAt = Date.now()
+    localStorage.setItem(CSV_EXPORT_LAST_AT_KEY, String(exportedAt))
     const seq = String(next).padStart(4, '0')
 
     const archiveName = `solargraph_export_${yyyy}${mm}${dd}_${hh}${mi}${ss}_${seq}.csv`
@@ -165,6 +180,9 @@ export default function App() {
 
     downloadCsv(archiveName, csv)
     downloadCsv(latestName, csv)
+
+    setCsvArchiveCount(next)
+    setCsvLastExportAt(exportedAt)
 
     setToast({ kind: 'success', msg: `CSV exporté (${allEntries.length} entrées) · archive #${seq}` })
   }
@@ -216,7 +234,7 @@ export default function App() {
         {tab === 'ajouter'  && <div className="screen"><AddForm onAdd={onAdd} onDone={() => setTab('liste')}/></div>}
         {tab === 'liste'    && <Liste entries={visibleEntries} onSelect={setSelected}/>} 
         {tab === 'carte'    && <Carte entries={visibleEntries} onSelect={setSelected}/>} 
-        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow} onExportCsv={handleExportCsv}/>} 
+        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow} onExportCsv={handleExportCsv} exportStats={{ entriesCount: visibleEntries.length, archiveCount: csvArchiveCount, lastExportAt: csvLastExportAt }}/>} 
         <TabBar active={tab} onTab={setTab}/>
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
       </div>

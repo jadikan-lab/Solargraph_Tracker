@@ -67,6 +67,7 @@ export default function Reglages({
   onDisconnectDrive,
   onSyncNow,
   onExportCsv,
+  exportStats = {},
 }) {
   const [boxItems, setBoxItems] = React.useState(() => readList('solar_box_types', DEFAULT_BOX_TYPES))
   const [holeItems, setHoleItems] = React.useState(() => readList('solar_holes', DEFAULT_HOLES))
@@ -85,6 +86,10 @@ export default function Reglages({
   const updateBoxes = (next) => { setBoxItems(next); writeList('solar_box_types', next) }
   const updateHoles = (next) => { setHoleItems(next); writeList('solar_holes', next) }
   const updatePapers = (next) => { setPaperItems(next); writeList('solar_papers', next) }
+  const entriesCount = Number(exportStats.entriesCount || 0)
+  const archiveCount = Number(exportStats.archiveCount || 0)
+  const lastExportAt = Number(exportStats.lastExportAt || 0)
+  const lastExportLabel = lastExportAt ? new Date(lastExportAt).toLocaleString('fr-FR') : 'jamais'
 
   const heroState = !navigator.onLine
     ? 'offline'
@@ -153,6 +158,11 @@ export default function Reglages({
             <div style={{ fontSize: 12.5, color: 'var(--encre-mute)', marginTop: 4, lineHeight: 1.45 }}>
               Crée deux fichiers: un fichier archive horodaté (historique) et un fichier latest facilement lisible.
             </div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <Chip muted>{entriesCount} entrées exportables</Chip>
+            <Chip muted>{archiveCount} archive{archiveCount > 1 ? 's' : ''}</Chip>
+            <Chip muted>dernier export: {lastExportLabel}</Chip>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <Btn kind="primary" size="sm" onClick={onExportCsv}>Exporter CSV</Btn>
