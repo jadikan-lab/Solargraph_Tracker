@@ -13,8 +13,10 @@ import {
   getPreviewDriveState,
   initPreviewDrive,
   publishPreviewToMyDrive,
+  setPreviewAutoPublishEnabled,
   subscribePreviewDrive,
   syncPreviewEntries,
+  verifyPreviewDrivePublication,
 } from './previewDrive'
 
 const CSV_EXPORT_COUNTER_KEY = 'solargraph_csv_export_counter'
@@ -76,6 +78,13 @@ export default function App() {
     }
 
     setEntries(nextEntries)
+    if (isPreview && driveState.authenticated && driveState.autoPublishEnabled) {
+      try {
+        await publishPreviewToMyDrive(nextEntries)
+      } catch (error) {
+        setToast({ kind: 'error', msg: `Auto-publish impossible: ${error.message}` })
+      }
+    }
     if (successMessage) {
       const suffix = isPreview && driveState.authenticated ? ' · Drive partagé synchro' : ' · synchro non active'
       setToast({ kind: 'success', msg: successMessage + suffix })
@@ -225,6 +234,20 @@ export default function App() {
     }
   }
 
+  const handlePreviewToggleAutoPublish = (enabled) => {
+    const next = setPreviewAutoPublishEnabled(enabled)
+    setToast({ kind: 'success', msg: next ? 'Auto-publish activé' : 'Auto-publish désactivé' })
+  }
+
+  const handlePreviewIntegrityCheck = async () => {
+    try {
+      const result = await verifyPreviewDrivePublication(await db.getEntries())
+      setToast({ kind: result.ok ? 'success' : 'error', msg: result.summary })
+    } catch (error) {
+      setToast({ kind: 'error', msg: `Contrôle d'intégrité impossible: ${error.message}` })
+    }
+  }
+
   if (selected) {
     return (
       <div className="app-shell">
@@ -244,7 +267,7 @@ export default function App() {
         {tab === 'ajouter'  && <div className="screen"><AddForm onAdd={onAdd} onDone={() => setTab('liste')}/></div>}
         {tab === 'liste'    && <Liste entries={visibleEntries} onSelect={setSelected}/>} 
         {tab === 'carte'    && <Carte entries={visibleEntries} onSelect={setSelected}/>} 
-        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow} onPublishDrive={handlePreviewPublish} onExportCsv={handleExportCsv} exportStats={{ entriesCount: visibleEntries.length, archiveCount: csvArchiveCount, lastExportAt: csvLastExportAt }}/>} 
+        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow} onPublishDrive={handlePreviewPublish} onToggleAutoPublish={handlePreviewToggleAutoPublish} onCheckIntegrity={handlePreviewIntegrityCheck} onExportCsv={handleExportCsv} exportStats={{ entriesCount: visibleEntries.length, archiveCount: csvArchiveCount, lastExportAt: csvLastExportAt }}/>} 
         <TabBar active={tab} onTab={setTab}/>
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
       </div>

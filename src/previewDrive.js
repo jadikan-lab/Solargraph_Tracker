@@ -6,6 +6,7 @@ const modeKey = runtime.mode || 'default'
 const driveFileName = runtime.driveFileName || 'solargraph_entries_preview.json'
 const lastSyncKey = `solargraph_last_drive_sync_${modeKey}`
 const publishInfoKey = `solargraph_last_drive_publish_${modeKey}`
+const autoPublishKey = `solargraph_auto_publish_${modeKey}`
 
 const listeners = new Set()
 
@@ -16,6 +17,7 @@ let driveFileId = null
 let pendingAuth = null
 
 const initialPublishInfo = readJson(publishInfoKey) || {}
+const initialAutoPublish = readNumber(autoPublishKey) === 1
 
 const state = {
   ready: false,
@@ -30,6 +32,11 @@ const state = {
   publishFolderId: initialPublishInfo.publishFolderId || '',
   publishFolderLink: initialPublishInfo.publishFolderLink || '',
   publishSheetLink: initialPublishInfo.publishSheetLink || '',
+  autoPublishEnabled: initialAutoPublish,
+  lastPublishStatus: initialPublishInfo.lastPublishStatus || 'idle',
+  lastPublishMessage: initialPublishInfo.lastPublishMessage || '',
+  lastIntegrityCheckAt: initialPublishInfo.lastIntegrityCheckAt || null,
+  integritySummary: initialPublishInfo.integritySummary || '',
   driveFileName,
 }
 
@@ -334,6 +341,12 @@ async function driveFindFolder(name, parentId = 'root') {
   return payload.files?.[0]?.id || null
 }
 
+async function driveListFolders(parentId) {
+  const query = encodeURIComponent(`'${queryLiteral(parentId)}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`)
+  const payload = await driveRequestJson(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,mimeType)`) 
+  return payload.files || []
+}
+
 async function driveCreateFolder(name, parentId = 'root') {
   const payload = await driveRequestJson('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
@@ -568,6 +581,8 @@ export async function publishPreviewToMyDrive(entries) {
       publishFolderId: mainFolderId,
       publishFolderLink: `https://drive.google.com/drive/folders/${mainFolderId}`,
       publishSheetLink: sheet?.webViewLink || '',
+      lastPublishStatus: 'success',
+      lastPublishMessage: `Publication ok · ${visibleEntries.length} entrées · ${uploadedPhotos} nouvelles photos`,
     }
     writeJson(publishInfoKey, publishInfo)
     setState({
@@ -584,7 +599,79 @@ export async function publishPreviewToMyDrive(entries) {
       entries: visibleEntries.length,
     }
   } catch (error) {
-    setState({ publishing: false, error: getErrorMessage(error) })
+    const message = getErrorMessage(error)
+    const publishInfo = {
+      ...readJson(publishInfoKey),
+      lastPublishStatus: 'error',
+      lastPublishMessage: message,
+    }
+    writeJson(publishInfoKey, publishInfo)
+    setState({ publishing: false, ...publishInfo, error: message })
     throw error
   }
+}
+
+export function setPreviewAutoPublishEnabled(enabled) {
+  const value = !!enabled
+  writeNumber(autoPublishKey, value ? 1 : 0)
+  setState({ autoPublishEnabled: value })
+  return value
+}
+
+export async function verifyPreviewDrivePublication(entries) {
+  if (!accessToken) throw new Error('Compte Google non connecté.')
+
+  const visibleEntries = (entries || []).filter((entry) => !entry?.deletedAt)
+  const expectedCount = visibleEntries.length
+  const expectedPhotos = visibleEntries.reduce((sum, entry) => {
+    const photos = Array.isArray(entry.photos) ? entry.photos.filter(Boolean).length : 0
+    const final = entry.finalPhotoDataURL ? 1 : 0
+    return sum + photos + final
+  }, 0)
+
+  const folderId = state.publishFolderId || await driveFindFolder('Solargraph_Tracker')
+  if (!folderId) {
+    const summary = 'Aucune publication visible trouvée (dossier absent).'
+    const now = Date.now()
+    const publishInfo = {
+      ...readJson(publishInfoKey),
+      lastIntegrityCheckAt: now,
+      integritySummary: summary,
+      lastPublishStatus: 'error',
+      lastPublishMessage: summary,
+    }
+    writeJson(publishInfoKey, publishInfo)
+    setState({ ...publishInfo })
+    return { ok: false, summary, expectedCount, expectedPhotos, folderCount: 0 }
+  }
+
+  const folders = await driveListFolders(folderId)
+  const jsonFile = await driveFindFileInFolder(folderId, 'solargraph_entries_latest.json')
+  const csvFile = await driveFindFileInFolder(folderId, 'solargraph_entries_latest.csv')
+  const sheetFile = await driveFindFileInFolder(folderId, 'solargraph_entries_latest_sheet', 'application/vnd.google-apps.spreadsheet')
+
+  const folderCount = folders.length
+  const countOk = folderCount === expectedCount
+  const filesOk = !!jsonFile?.id && !!csvFile?.id && !!sheetFile?.id
+  const ok = countOk && filesOk
+
+  const summary = ok
+    ? `Intégrité OK · ${expectedCount} sténopés · ~${expectedPhotos} photos attendues`
+    : `Écart détecté · attendus ${expectedCount} dossiers / trouvés ${folderCount}`
+
+  const now = Date.now()
+  const publishInfo = {
+    ...readJson(publishInfoKey),
+    publishFolderId: folderId,
+    publishFolderLink: `https://drive.google.com/drive/folders/${folderId}`,
+    publishSheetLink: sheetFile?.webViewLink || '',
+    lastIntegrityCheckAt: now,
+    integritySummary: summary,
+    lastPublishStatus: ok ? 'success' : 'error',
+    lastPublishMessage: summary,
+  }
+  writeJson(publishInfoKey, publishInfo)
+  setState({ ...publishInfo, error: '' })
+
+  return { ok, summary, expectedCount, expectedPhotos, folderCount }
 }

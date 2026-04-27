@@ -67,6 +67,8 @@ export default function Reglages({
   onDisconnectDrive,
   onSyncNow,
   onPublishDrive,
+  onToggleAutoPublish,
+  onCheckIntegrity,
   onExportCsv,
   exportStats = {},
 }) {
@@ -143,8 +145,21 @@ export default function Reglages({
               <Btn kind="success" size="sm" onClick={onPublishDrive} disabled={!driveState.authenticated || driveState.publishing}>
                 {driveState.publishing ? 'Publication…' : 'Publier sur Mon Drive'}
               </Btn>
+              <Btn kind="secondary" size="sm" onClick={onCheckIntegrity} disabled={!driveState.authenticated || driveState.publishing}>
+                Vérifier intégrité
+              </Btn>
               <Btn kind="secondary" size="sm" onClick={onConnectDrive}>Changer de compte</Btn>
               <Btn kind="ghost" size="sm" onClick={onDisconnectDrive} disabled={!driveState.authenticated}>Déconnecter</Btn>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '6px 0' }}>
+              <div style={{ fontSize: 12.5, color: 'var(--encre)' }}>Auto-publier après chaque sync</div>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={!!driveState.autoPublishEnabled}
+                  onChange={(e) => onToggleAutoPublish?.(e.target.checked)}
+                />
+              </label>
             </div>
             {driveState.publishFolderLink && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -159,6 +174,16 @@ export default function Reglages({
                 {driveState.lastPublishAt && (
                   <span style={{ fontSize: 12.5, color: 'var(--encre-mute)' }}>
                     publié le {new Date(driveState.lastPublishAt).toLocaleString('fr-FR')}
+                  </span>
+                )}
+              </div>
+            )}
+            {(driveState.lastPublishMessage || driveState.integritySummary) && (
+              <div style={{ fontSize: 12.5, lineHeight: 1.45, color: driveState.lastPublishStatus === 'error' ? 'var(--alerte-deep)' : 'var(--encre-mute)' }}>
+                {driveState.lastPublishMessage || driveState.integritySummary}
+                {driveState.lastIntegrityCheckAt && (
+                  <span style={{ marginLeft: 6 }}>
+                    · contrôle {new Date(driveState.lastIntegrityCheckAt).toLocaleString('fr-FR')}
                   </span>
                 )}
               </div>
