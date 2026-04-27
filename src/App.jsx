@@ -25,6 +25,7 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [online, setOnline] = useState(navigator.onLine)
   const [driveState, setDriveState] = useState(getPreviewDriveState())
+  const visibleEntries = entries.filter((entry) => !entry.deletedAt)
 
   useEffect(() => {
     const load = async () => setEntries(await db.getEntries())
@@ -80,7 +81,7 @@ export default function App() {
 
   const onDelete = async (id) => {
     await db.deleteEntry?.(id)
-    await syncPreviewIfNeeded('Supprimé')
+    await syncPreviewIfNeeded('Envoyé en corbeille')
     setSelected(null)
   }
 
@@ -129,8 +130,8 @@ export default function App() {
         {isPreview && <div className="banner-preview">Preview redesign partagee · memes donnees que la version classique</div>}
         {!online && <div className="banner-offline">Hors ligne — les modifs sont conservées en local</div>}
         {tab === 'ajouter'  && <div className="screen"><AddForm onAdd={onAdd} onDone={() => setTab('liste')}/></div>}
-        {tab === 'liste'    && <Liste entries={entries} onSelect={setSelected}/>}
-        {tab === 'carte'    && <Carte entries={entries} onSelect={setSelected}/>}
+        {tab === 'liste'    && <Liste entries={visibleEntries} onSelect={setSelected}/>} 
+        {tab === 'carte'    && <Carte entries={visibleEntries} onSelect={setSelected}/>} 
         {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow}/>} 
         <TabBar active={tab} onTab={setTab}/>
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
@@ -170,7 +171,7 @@ export default function App() {
           <Carte entries={entries} onSelect={setSelected}/>
         </section>
         <aside className="right">
-          <Liste entries={entries} onSelect={setSelected}/>
+          <Liste entries={visibleEntries} onSelect={setSelected}/>
         </aside>
         {isPreview && <div className="banner-preview desktop-preview">Preview redesign partagee · memes donnees que la version classique</div>}
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}

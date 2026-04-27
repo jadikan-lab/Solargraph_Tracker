@@ -84,7 +84,7 @@ function DetailView({ entry, onBack, onUpdate, onDelete, onRecuperer }) {
           <Btn kind="success" style={{ flex: 1 }} icon={<IconCheck size={18}/>} onClick={onRecuperer}>Récupérer</Btn>
         )}
         <Btn kind="ghost" style={{ width: 44, padding: 0, color: 'var(--alerte-deep)' }} aria-label="supprimer"
-             onClick={() => { if (confirm('Supprimer ce sténopé localement ? (la corbeille Drive 14 j conserve une copie)')) onDelete?.(entry.id) }}>
+             onClick={() => { if (confirm('Envoyer ce sténopé dans la corbeille partagée ? (suppression définitive différée)')) onDelete?.(entry.id) }}>
           <IconTrash size={18}/>
         </Btn>
       </ActionBar>

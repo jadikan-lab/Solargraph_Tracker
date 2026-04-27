@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import imageCompression from 'browser-image-compression'
 import { Btn, Chip, Field, ScreenTitle, StatusPill, IconCheck, IconPin, IconCamera, IconChev } from '../ui.jsx'
 
@@ -25,16 +25,18 @@ export default function AddForm({ onAdd, onDone }) {
   const [boxTypes, setBoxTypes] = useState(() => readList('solar_box_types', DEFAULT_BOX_TYPES))
   const [holeSizes, setHoleSizes] = useState(() => readList('solar_holes', DEFAULT_HOLES))
   const [paperTypes, setPaperTypes] = useState(() => readList('solar_papers', DEFAULT_PAPERS))
-  const [photoData, setPhotoData] = useState(null)
-  const [secondaryPhoto, setSecondaryPhoto] = useState(null)
+  const [photos, setPhotos] = useState([])
   const [boxType, setBoxType] = useState(() => readList('solar_box_types', DEFAULT_BOX_TYPES)[0])
   const [holeDiameter, setHoleDiameter] = useState(() => toNumber(readList('solar_holes', DEFAULT_HOLES)[0], 0.26))
   const [paperType, setPaperType] = useState(() => readList('solar_papers', DEFAULT_PAPERS)[0])
   const [orientation, setOrientation] = useState('SO')
   const [name, setName] = useState('')
   const [loc, setLoc] = useState(null)
+  const [geoError, setGeoError] = useState('')
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
+  const mainInputRef = useRef(null)
+  const extraInputRef = useRef(null)
 
   useEffect(() => {
     const refreshLists = () => {
@@ -54,24 +56,57 @@ export default function AddForm({ onAdd, onDone }) {
     return () => window.removeEventListener('storage', refreshLists)
   }, [boxType, holeDiameter, paperType])
 
-  const pickPhoto = async (file, setter) => {
+  const pickPhoto = async (file, mode = 'append') => {
     if (!file) return
     try {
-      const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1600 })
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.35,
+        maxWidthOrHeight: 1400,
+        initialQuality: 0.72,
+        useWebWorker: true,
+      })
       const dataUrl = await imageCompression.getDataUrlFromFile(compressed)
-      setter(dataUrl)
+      setPhotos((current) => {
+        if (mode === 'main') {
+          const next = current.slice()
+          if (next.length === 0) return [dataUrl]
+          next[0] = dataUrl
+          return next
+        }
+        return [...current, dataUrl]
+      })
     } catch {
       const fr = new FileReader()
-      fr.onload = () => setter(fr.result)
+      fr.onload = () => {
+        setPhotos((current) => {
+          if (mode === 'main') {
+            const next = current.slice()
+            if (next.length === 0) return [fr.result]
+            next[0] = fr.result
+            return next
+          }
+          return [...current, fr.result]
+        })
+      }
       fr.readAsDataURL(file)
     }
   }
 
+  const removePhoto = (index) => {
+    setPhotos((current) => current.filter((_, currentIndex) => currentIndex !== index))
+  }
+
   const captureLoc = () => {
-    if (!navigator.geolocation) return alert('Géolocalisation non prise en charge')
+    if (!navigator.geolocation) {
+      setGeoError('Géolocalisation non prise en charge')
+      return
+    }
     navigator.geolocation.getCurrentPosition(
-      (p) => setLoc({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
-      (err) => alert('Erreur géoloc : ' + err.message),
+      (p) => {
+        setLoc({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy })
+        setGeoError('')
+      },
+      (err) => setGeoError(err.message || 'Erreur de géolocalisation'),
       { enableHighAccuracy: true, timeout: 10000 }
     )
   }
@@ -80,14 +115,13 @@ export default function AddForm({ onAdd, onDone }) {
 
   const onSubmit = async (e) => {
     e.preventDefault()
-    if (!photoData) return alert('Ajoute la photo principale')
+    if (!photos.length) return alert('Ajoute la photo principale')
     setBusy(true)
-    const photos = [photoData, secondaryPhoto].filter(Boolean)
     const entry = {
       name: name || 'Sans nom',
       initialPhotoDataURL: photos[0] || null,
       secondaryPhotoDataURL: photos[1] || null,
-      photos,
+      photos: photos.slice(),
       location: loc || null,
       boxType, holeDiameter_mm: holeDiameter,
       paperType,
@@ -107,10 +141,10 @@ export default function AddForm({ onAdd, onDone }) {
       {/* Photos */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: 10 }}>
         <label style={{ position: 'relative', display: 'block' }}>
-          <input type="file" accept="image/*" capture="environment" onChange={(e) => pickPhoto(e.target.files[0], setPhotoData)}
+          <input ref={mainInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => { pickPhoto(e.target.files[0], 'main'); e.target.value = '' }}
                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}/>
-          {photoData ? (
-            <img src={photoData} alt="" style={{ width: '100%', aspectRatio: '4/5', objectFit: 'cover', borderRadius: 10, border: '1px solid var(--papier-edge)' }}/>
+          {photos[0] ? (
+            <img src={photos[0]} alt="" style={{ width: '100%', aspectRatio: '4/5', objectFit: 'cover', borderRadius: 10, border: '1px solid var(--papier-edge)' }}/>
           ) : (
             <div className="photo-ph" style={{ aspectRatio: '4/5' }}>
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
@@ -121,18 +155,37 @@ export default function AddForm({ onAdd, onDone }) {
         </label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <label style={{ position: 'relative', display: 'block' }}>
-            <input type="file" accept="image/*" onChange={(e) => pickPhoto(e.target.files[0], setSecondaryPhoto)}
+            <input ref={extraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => { pickPhoto(e.target.files[0], 'append'); e.target.value = '' }}
                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}/>
-            {secondaryPhoto ? (
-              <img src={secondaryPhoto} alt="" style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: 10, border: '1px solid var(--papier-edge)' }}/>
-            ) : (
-              <div className="photo-ph" style={{ aspectRatio: '1/1' }}>+ ajouter</div>
-            )}
+            <div className="photo-ph" style={{ aspectRatio: '1/1', gap: 8 }}>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <IconCamera size={18}/> photo detail
+              </span>
+            </div>
           </label>
-          <div style={{ aspectRatio: '1/1', borderRadius: 10, border: '1px dashed var(--papier-edge)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'var(--encre-mute)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>+ ajouter</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {photos.slice(1, 5).map((photo, index) => (
+              <div key={index} style={{ position: 'relative' }}>
+                <img src={photo} alt="" style={{ width: '100%', aspectRatio: '1/1', objectFit: 'cover', borderRadius: 10, border: '1px solid var(--papier-edge)' }}/>
+                <button type="button" onClick={() => removePhoto(index + 1)} aria-label="Retirer la photo"
+                        style={{ position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: 999, border: 'none', background: 'rgba(38,31,24,0.78)', color: '#fff', cursor: 'pointer' }}>
+                  ×
+                </button>
+              </div>
+            ))}
+            {photos.length > 0 && !photos[1] && (
+              <button type="button" onClick={() => extraInputRef.current?.click()}
+                      style={{ aspectRatio: '1/1', borderRadius: 10, border: '1px dashed var(--papier-edge)', background: 'transparent', cursor: 'pointer', color: 'var(--encre-mute)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                + ajouter
+              </button>
+            )}
+          </div>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Chip muted>{photos.length ? `${photos.length} photo${photos.length > 1 ? 's' : ''}` : 'aucune photo'}</Chip>
+        <Chip muted>compression auto ~ 350 Ko cible / image</Chip>
       </div>
 
       {/* Status + GPS */}
@@ -141,6 +194,7 @@ export default function AddForm({ onAdd, onDone }) {
         <Chip icon={<IconPin size={12}/>}>{loc ? `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}` : 'GPS…'}</Chip>
         {loc && <Chip muted>± {Math.round(loc.accuracy)} m · auto</Chip>}
         {!loc && <Chip muted onClick={captureLoc} style={{ cursor: 'pointer' }}>réessayer</Chip>}
+        {geoError && <Chip muted>{geoError}</Chip>}
       </div>
 
       <Field label="Nom du sténopé">
