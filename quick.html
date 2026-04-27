@@ -569,6 +569,15 @@ function initGoogleAuth(){
   if(typeof google==='undefined'||!google.accounts) return
   window.tokenClient = google.accounts.oauth2.initTokenClient({
     client_id:GOOGLE_CLIENT_ID, scope:DRIVE_SCOPE,
+    error_callback: (err)=>{
+      const reason = (err && (err.type || err.error || err.message)) || 'unknown_error'
+      console.error('Google auth popup error:', err)
+      if(reason === 'popup_failed_to_open' || reason === 'popup_closed'){
+        toast('Popup Google bloqué/fermé. Autorise les popups puis réessaie.')
+      } else {
+        toast('Connexion Google impossible ('+reason+').')
+      }
+    },
     callback: async resp=>{
       if(resp.error){toast('Erreur auth: '+resp.error); return}
       gToken = resp.access_token
@@ -578,19 +587,19 @@ function initGoogleAuth(){
     }
   })
   try{
-    if(localStorage.getItem('gsi_granted')) window.tokenClient.requestAccessToken()
+    if(localStorage.getItem('gsi_granted')) window.tokenClient.requestAccessToken({prompt:''})
   }catch(e){console.warn('silent token:',e)}
 }
 document.getElementById('authBtn').addEventListener('click',()=>{
   if(gToken){
     google.accounts.oauth2.revoke(gToken,()=>{gToken=null;try{localStorage.removeItem('gsi_granted')}catch(e){}; updateAuthUI(false)})
   } else {
-    if(window.tokenClient) window.tokenClient.requestAccessToken()
+    if(window.tokenClient) window.tokenClient.requestAccessToken({prompt:'select_account'})
     else toast('SDK Google non chargé, attends 2s')
   }
 })
 function updateAuthUI(loggedIn){
-  document.getElementById('authBtn').textContent = loggedIn ? '🔓 Déconnexion' : '�� Connexion Google'
+  document.getElementById('authBtn').textContent = loggedIn ? '🔓 Déconnexion' : '🔐 Connexion Google'
   document.getElementById('authBtn').className = loggedIn ? 'd-btn danger' : 'd-btn primary'
   document.getElementById('authStatus').textContent = loggedIn ? '✓ Connecté' : 'Déconnecté'
   document.getElementById('authDot').className = loggedIn ? 'ok' : ''
