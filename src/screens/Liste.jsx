@@ -59,7 +59,7 @@ export default function Liste({ entries, onSelect }) {
                     {e.name || 'Sans nom'}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--encre-mute)', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
-                    j+{days(e)} · {e.boxType || '—'} · Ø{e.holeDiameter_mm}
+                    j+{days(e)} · {e.boxType || '—'} · Ø{e.holeDiameter_mm} · {e.paperType || 'papier —'}
                   </div>
                 </div>
               </div>
