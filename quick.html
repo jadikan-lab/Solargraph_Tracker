@@ -574,6 +574,20 @@ function toast(msg, duration=2500){
 async function localLoad(){ try{ return (await localforage.getItem(IDB_KEY))||[] }catch{ return [] } }
 async function localSave(arr){ await localforage.setItem(IDB_KEY, arr) }
 
+function entryModifiedAt(e){ return Number((e && (e.updatedAt || e.createdAt)) || 0) }
+function mergeEntries(localEntries, driveEntries){
+  const byId = new Map()
+  for(const e of (driveEntries||[])){
+    if(e && e.id) byId.set(e.id, e)
+  }
+  for(const e of (localEntries||[])){
+    if(!e || !e.id) continue
+    const prev = byId.get(e.id)
+    if(!prev || entryModifiedAt(e) >= entryModifiedAt(prev)) byId.set(e.id, e)
+  }
+  return Array.from(byId.values()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))
+}
+
 // ── Helpers ───────────────────────────────────────────
 function sanitize(s){ return (s||'').toString().replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_\-.]/g,'') }
 function entryFilename(e, idx, isFinal=false){
@@ -617,11 +631,18 @@ async function driveWrite(entries){
 }
 async function syncFromDrive(){
   try{
+    const localEntries = await localLoad()
     driveFileId = await driveFind()
     if(driveFileId){
-      allEntries = await driveRead(driveFileId)
-      await localSave(allEntries)
+      const driveEntries = await driveRead(driveFileId)
+      const merged = mergeEntries(localEntries, Array.isArray(driveEntries) ? driveEntries : [])
+      allEntries = merged
+      await localSave(merged)
+      await driveWrite(merged)
       lastDriveSync = Date.now(); try{localStorage.setItem('lastDriveSync',String(lastDriveSync))}catch(e){}
+    } else if(localEntries.length>0){
+      allEntries = localEntries
+      await driveWrite(localEntries)
     } else if(allEntries.length>0){
       await driveWrite(allEntries)
     }
@@ -991,7 +1012,7 @@ function renderList(){
     const mk=(label,fn,danger)=>{const b=document.createElement('button');b.className='btn-xs'+(danger?' danger':'');b.textContent=label;b.onclick=fn;return b}
     act.appendChild(mk('🗺 Voir',()=>{switchTab('panelMap');if(e.location)setTimeout(()=>map.setView([e.location.lat,e.location.lng],15),300)}))
     act.appendChild(mk('✏️ Modifier',()=>openEditModal(e.id)))
-    act.appendChild(mk(e.retrievalDate?'↩ Annuler récup':'✓ Récupéré',async()=>{const i=allEntries.findIndex(x=>x.id===e.id);if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now();await saveAndSync(allEntries)}}))
+    act.appendChild(mk(e.retrievalDate?'↩ Annuler récup':'✓ Récupéré',async()=>{const i=allEntries.findIndex(x=>x.id===e.id);if(i!==-1){allEntries[i].retrievalDate=allEntries[i].retrievalDate?null:Date.now();allEntries[i].updatedAt=Date.now();await saveAndSync(allEntries)}}))
     act.appendChild(mk('📷 Photo finale',()=>openFinalUpload(e.id)))
     if(e.myDrivePhotos&&e.myDrivePhotos[0]&&e.myDrivePhotos[0].webViewLink)
       act.appendChild(mk('🔗 Drive',()=>window.open(e.myDrivePhotos[0].webViewLink,'_blank')))
@@ -1041,7 +1062,7 @@ async function openFinalUpload(id){
     const f=ev.target.files&&ev.target.files[0]; if(!f) return
     const d=await compressFile(f,1200,0.75)
     const i=allEntries.findIndex(x=>x.id===id)
-    if(i!==-1){allEntries[i].finalPhotoDataURL=d;await saveAndSync(allEntries);toast('Photo finale enregistrée ✓')}
+    if(i!==-1){allEntries[i].finalPhotoDataURL=d;allEntries[i].updatedAt=Date.now();await saveAndSync(allEntries);toast('Photo finale enregistrée ✓')}
   }; inp.click()
 }
 
@@ -1122,6 +1143,7 @@ document.getElementById('editSaveBtn').addEventListener('click',async()=>{
     allEntries[i].orientation = eo
     delete allEntries[i].orientationDeg
   }
+  allEntries[i].updatedAt = Date.now()
   // If photos changed, clear Drive links for this entry so they re-upload
   delete allEntries[i].myDrivePhotos
   closeEditModal()
@@ -1158,10 +1180,11 @@ function startGeoloc(){
 document.getElementById('saveBtn').addEventListener('click',async()=>{
   if(!pendingPhotos.length){toast("Ajoute au moins une photo !"); return}
   const id=Date.now().toString(36)+Math.random().toString(36).slice(2,8)
+  const now = Date.now()
   // orientation
   const oSel = document.getElementById('orientationSelect').value
   const oDeg = document.getElementById('orientationDegree').value
-  const entry={id,createdAt:Date.now(),photos:pendingPhotos.slice(),location:currentLoc,
+  const entry={id,createdAt:now,updatedAt:now,photos:pendingPhotos.slice(),location:currentLoc,
     boxType:document.getElementById('boxType').value,
     holeDiameter_mm:Number(document.getElementById('hole').value),
     paperType:document.getElementById('paperType').value,
