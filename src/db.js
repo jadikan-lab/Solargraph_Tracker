@@ -1,8 +1,9 @@
 import localforage from 'localforage'
 import { v4 as uuidv4 } from 'uuid'
 
-const store = localforage.createInstance({ name: 'solargraph-tracker' })
-const ENTRIES_KEY = 'entries_v1'
+const runtime = window.__SG_RUNTIME__ || {}
+const store = localforage.createInstance({ name: runtime.storageName || 'solargraph-tracker' })
+const ENTRIES_KEY = runtime.entriesKey || 'entries_v1'
 
 async function getEntries() { return (await store.getItem(ENTRIES_KEY)) || [] }
 async function addEntry(entry) {
@@ -21,4 +22,8 @@ async function deleteEntry(id) {
   const all = await getEntries()
   await store.setItem(ENTRIES_KEY, all.filter((x) => x.id !== id))
 }
-export default { getEntries, addEntry, updateEntry, deleteEntry }
+async function replaceEntries(entries) {
+  await store.setItem(ENTRIES_KEY, entries)
+  return entries
+}
+export default { getEntries, addEntry, updateEntry, deleteEntry, replaceEntries }

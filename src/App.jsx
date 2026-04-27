@@ -7,13 +7,24 @@ import Liste from './screens/Liste'
 import Carte from './screens/Carte'
 import Detail from './screens/Detail'
 import Reglages from './screens/Reglages'
+import {
+  connectPreviewDrive,
+  disconnectPreviewDrive,
+  getPreviewDriveState,
+  initPreviewDrive,
+  subscribePreviewDrive,
+  syncPreviewEntries,
+} from './previewDrive'
 
 export default function App() {
+  const runtime = window.__SG_RUNTIME__ || {}
+  const isPreview = runtime.preview === true
   const [entries, setEntries] = useState([])
   const [tab, setTab] = useState('liste')
   const [selected, setSelected] = useState(null)
   const [toast, setToast] = useState(null)
   const [online, setOnline] = useState(navigator.onLine)
+  const [driveState, setDriveState] = useState(getPreviewDriveState())
 
   useEffect(() => {
     const load = async () => setEntries(await db.getEntries())
@@ -24,10 +35,82 @@ export default function App() {
     return () => { clearInterval(iv); window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
 
+  useEffect(() => {
+    if (!isPreview) return undefined
+
+    initPreviewDrive()
+    return subscribePreviewDrive(setDriveState)
+  }, [isPreview])
+
   const refresh = async () => setEntries(await db.getEntries())
-  const onAdd = async (entry) => { await db.addEntry(entry); await refresh(); setToast({ kind: 'success', msg: 'Sténopé enregistré · sync en cours' }); setTab('liste') }
-  const onUpdate = async (id, patch) => { await db.updateEntry(id, patch); await refresh(); setToast({ kind: 'success', msg: 'Mis à jour' }) }
-  const onDelete = async (id) => { await db.deleteEntry?.(id); await refresh(); setSelected(null); setToast({ kind: 'success', msg: 'Supprimé localement' }) }
+
+  const syncPreviewIfNeeded = async (successMessage) => {
+    const localEntries = await db.getEntries()
+    let nextEntries = localEntries
+
+    if (isPreview && driveState.authenticated) {
+      try {
+        nextEntries = await syncPreviewEntries(localEntries)
+        await db.replaceEntries(nextEntries)
+      } catch (error) {
+        setEntries(localEntries)
+        setToast({ kind: 'error', msg: `Sync Drive preview impossible: ${error.message}` })
+        return localEntries
+      }
+    }
+
+    setEntries(nextEntries)
+    if (successMessage) {
+      const suffix = isPreview && driveState.authenticated ? ' · Drive preview synchro' : ' · local seulement'
+      setToast({ kind: 'success', msg: successMessage + suffix })
+    }
+    return nextEntries
+  }
+
+  const onAdd = async (entry) => {
+    await db.addEntry(entry)
+    await syncPreviewIfNeeded('Sténopé enregistré')
+    setTab('liste')
+  }
+
+  const onUpdate = async (id, patch) => {
+    await db.updateEntry(id, patch)
+    await syncPreviewIfNeeded('Mis à jour')
+  }
+
+  const onDelete = async (id) => {
+    await db.deleteEntry?.(id)
+    await syncPreviewIfNeeded('Supprimé')
+    setSelected(null)
+  }
+
+  const handlePreviewConnect = async () => {
+    try {
+      await connectPreviewDrive({ forceAccountChooser: true })
+      const merged = await syncPreviewEntries(await db.getEntries())
+      await db.replaceEntries(merged)
+      setEntries(merged)
+      setToast({ kind: 'success', msg: 'Compte Google connecté · preview synchronisée' })
+    } catch (error) {
+      setToast({ kind: 'error', msg: `Connexion Google impossible: ${error.message}` })
+    }
+  }
+
+  const handlePreviewDisconnect = async () => {
+    await disconnectPreviewDrive()
+    setToast({ kind: 'success', msg: 'Compte Google déconnecté pour la preview' })
+  }
+
+  const handlePreviewSyncNow = async () => {
+    try {
+      const merged = await syncPreviewEntries(await db.getEntries())
+      await db.replaceEntries(merged)
+      setEntries(merged)
+      setToast({ kind: 'success', msg: 'Preview synchronisée avec Drive' })
+    } catch (error) {
+      setToast({ kind: 'error', msg: `Sync Drive impossible: ${error.message}` })
+    }
+  }
 
   if (selected) {
     return (
@@ -43,11 +126,12 @@ export default function App() {
     <>
       {/* Mobile shell */}
       <div className="app-shell mobile-only">
+        {isPreview && <div className="banner-preview">Preview redesign isolee · stockage local separe</div>}
         {!online && <div className="banner-offline">Hors ligne — les modifs sont conservées en local</div>}
         {tab === 'ajouter'  && <div className="screen"><AddForm onAdd={onAdd} onDone={() => setTab('liste')}/></div>}
         {tab === 'liste'    && <Liste entries={entries} onSelect={setSelected}/>}
         {tab === 'carte'    && <Carte entries={entries} onSelect={setSelected}/>}
-        {tab === 'reglages' && <Reglages/>}
+        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow}/>} 
         <TabBar active={tab} onTab={setTab}/>
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
       </div>
@@ -57,7 +141,7 @@ export default function App() {
         <aside className="nav">
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontWeight: 500, fontSize: 22 }}>Solargraph</div>
-            <div className="cap" style={{ marginTop: 4 }}>tracker · consultation</div>
+            <div className="cap" style={{ marginTop: 4 }}>{isPreview ? 'preview redesign · consultation' : 'tracker · consultation'}</div>
           </div>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {[{ id: 'liste', l: 'Liste' }, { id: 'carte', l: 'Carte' }, { id: 'reglages', l: 'Réglages' }].map((it) => (
@@ -71,8 +155,14 @@ export default function App() {
           </nav>
           <div style={{ flex: 1 }}/>
           <div className="card">
-            <div style={{ fontSize: 12, fontWeight: 600 }}>Drive synchronisé</div>
-            <div style={{ fontSize: 11.5, color: 'var(--encre-mute)' }}>il y a 2 min · {online ? 'Wi-Fi' : 'hors ligne'}</div>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{isPreview ? 'Drive preview' : 'Drive synchronisé'}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--encre-mute)' }}>
+              {isPreview
+                ? (driveState.authenticated
+                    ? `${driveState.email || 'compte connecté'} · ${driveState.lastSyncAt ? new Date(driveState.lastSyncAt).toLocaleTimeString('fr-FR') : 'jamais synchronisé'}`
+                    : 'compte non connecté')
+                : `il y a 2 min · ${online ? 'Wi-Fi' : 'hors ligne'}`}
+            </div>
             <div style={{ marginTop: 10, fontSize: 11, color: 'var(--encre-mute)', fontFamily: 'var(--font-mono)' }}>ajout : mobile uniquement</div>
           </div>
         </aside>
@@ -82,6 +172,7 @@ export default function App() {
         <aside className="right">
           <Liste entries={entries} onSelect={setSelected}/>
         </aside>
+        {isPreview && <div className="banner-preview desktop-preview">Preview redesign isolee · stockage local separe</div>}
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
       </div>
     </>
