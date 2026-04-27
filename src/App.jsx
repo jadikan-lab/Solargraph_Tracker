@@ -19,6 +19,7 @@ import {
 export default function App() {
   const runtime = window.__SG_RUNTIME__ || {}
   const isPreview = runtime.preview === true
+  const CSV_EXPORT_COUNTER_KEY = 'solargraph_csv_export_counter'
   const [entries, setEntries] = useState([])
   const [tab, setTab] = useState('liste')
   const [selected, setSelected] = useState(null)
@@ -85,6 +86,89 @@ export default function App() {
     setSelected(null)
   }
 
+  const csvSafe = (value) => {
+    const text = String(value ?? '').replace(/\r?\n/g, ' ')
+    return `"${text.replace(/"/g, '""')}"`
+  }
+
+  const formatDate = (value) => {
+    if (!value) return ''
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ''
+    return date.toLocaleString('fr-FR')
+  }
+
+  const toCsvRows = (rows) => {
+    const header = [
+      'id', 'nom', 'statut', 'date_pose', 'date_recuperation', 'jours_exposition',
+      'boite', 'diametre_mm', 'papier', 'orientation', 'latitude', 'longitude', 'precision_gps_m',
+      'notes_pose', 'note_recuperation'
+    ]
+
+    const body = rows.map((entry) => {
+      const retrievalDate = entry.retrievalDate || null
+      const durationEnd = retrievalDate || Date.now()
+      const days = Math.max(0, Math.floor((durationEnd - (entry.createdAt || Date.now())) / 86400000))
+      return [
+        entry.id || '',
+        entry.name || '',
+        retrievalDate ? 'recupere' : 'en_place',
+        formatDate(entry.createdAt),
+        formatDate(retrievalDate),
+        String(days),
+        entry.boxType || '',
+        entry.holeDiameter_mm ?? '',
+        entry.paperType || '',
+        entry.orientation || '',
+        entry.location?.lat ?? '',
+        entry.location?.lng ?? '',
+        entry.location?.accuracy ?? '',
+        entry.notes || '',
+        entry.retrievalNote || '',
+      ]
+    })
+
+    return [header, ...body].map((line) => line.map(csvSafe).join(',')).join('\n')
+  }
+
+  const downloadCsv = (fileName, csvContent) => {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportCsv = async () => {
+    const allEntries = (await db.getEntries()).filter((entry) => !entry.deletedAt)
+    const csv = toCsvRows(allEntries)
+
+    const now = new Date()
+    const yyyy = now.getFullYear()
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const dd = String(now.getDate()).padStart(2, '0')
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mi = String(now.getMinutes()).padStart(2, '0')
+    const ss = String(now.getSeconds()).padStart(2, '0')
+
+    const previous = Number(localStorage.getItem(CSV_EXPORT_COUNTER_KEY) || '0')
+    const next = Number.isFinite(previous) ? previous + 1 : 1
+    localStorage.setItem(CSV_EXPORT_COUNTER_KEY, String(next))
+    const seq = String(next).padStart(4, '0')
+
+    const archiveName = `solargraph_export_${yyyy}${mm}${dd}_${hh}${mi}${ss}_${seq}.csv`
+    const latestName = 'solargraph_export_latest.csv'
+
+    downloadCsv(archiveName, csv)
+    downloadCsv(latestName, csv)
+
+    setToast({ kind: 'success', msg: `CSV exporté (${allEntries.length} entrées) · archive #${seq}` })
+  }
+
   const handlePreviewConnect = async () => {
     try {
       await connectPreviewDrive({ forceAccountChooser: true })
@@ -132,7 +216,7 @@ export default function App() {
         {tab === 'ajouter'  && <div className="screen"><AddForm onAdd={onAdd} onDone={() => setTab('liste')}/></div>}
         {tab === 'liste'    && <Liste entries={visibleEntries} onSelect={setSelected}/>} 
         {tab === 'carte'    && <Carte entries={visibleEntries} onSelect={setSelected}/>} 
-        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow}/>} 
+        {tab === 'reglages' && <Reglages isPreview={isPreview} runtime={runtime} driveState={driveState} onConnectDrive={handlePreviewConnect} onDisconnectDrive={handlePreviewDisconnect} onSyncNow={handlePreviewSyncNow} onExportCsv={handleExportCsv}/>} 
         <TabBar active={tab} onTab={setTab}/>
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
       </div>

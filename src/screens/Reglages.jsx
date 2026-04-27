@@ -66,6 +66,7 @@ export default function Reglages({
   onConnectDrive,
   onDisconnectDrive,
   onSyncNow,
+  onExportCsv,
 }) {
   const [boxItems, setBoxItems] = React.useState(() => readList('solar_box_types', DEFAULT_BOX_TYPES))
   const [holeItems, setHoleItems] = React.useState(() => readList('solar_holes', DEFAULT_HOLES))
@@ -145,6 +146,20 @@ export default function Reglages({
       <ListEditor title="Boîtes" items={boxItems} placeholder="Ajouter un type de boîte" onChange={updateBoxes}/>
       <ListEditor title="Diamètres" items={holeItems} placeholder="Ajouter un diamètre" onChange={updateHoles}/>
       <ListEditor title="Papiers" items={paperItems} placeholder="Ajouter un type de papier" onChange={updatePapers}/>
+      <Card>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>Export CSV</div>
+            <div style={{ fontSize: 12.5, color: 'var(--encre-mute)', marginTop: 4, lineHeight: 1.45 }}>
+              Crée deux fichiers: un fichier archive horodaté (historique) et un fichier latest facilement lisible.
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <Btn kind="primary" size="sm" onClick={onExportCsv}>Exporter CSV</Btn>
+            <Chip muted>archive + latest</Chip>
+          </div>
+        </div>
+      </Card>
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
