@@ -303,10 +303,11 @@ body {
 
 /* Recenter FAB */
 .recenter-fab {
-  position: absolute; right: 16px; width: 48px; height: 48px; border-radius: 999px;
+  position: absolute; left: 16px; width: 60px; height: 60px; border-radius: 999px;
   background: var(--papier); border: 1px solid var(--papier-edge); color: var(--encre);
   cursor: pointer; box-shadow: var(--shadow-md);
   display: flex; align-items: center; justify-content: center; z-index: 401;
+  touch-action: manipulation;
 }
 
 /* Empty state */

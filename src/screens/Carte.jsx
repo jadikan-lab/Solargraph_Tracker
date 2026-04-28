@@ -23,7 +23,7 @@ export default function Carte({ entries, onSelect }) {
       const raw = JSON.parse(sessionStorage.getItem(VIEW_KEY) || 'null')
       if (Array.isArray(raw?.center) && Number.isFinite(raw?.zoom)) return raw
     } catch {}
-    return { center: [48.8566, 2.3522], zoom: 13 }
+    return { center: [48.8566, 2.3522], zoom: 11 }
   })
   const [locError, setLocError] = useState('')
   const mapApiRef = useRef(null)
@@ -76,7 +76,7 @@ export default function Carte({ entries, onSelect }) {
       </div>
 
       {/* Recenter */}
-      <button className="recenter-fab" style={{ bottom: `calc(${typeof sheetH === 'number' ? sheetH + 'px' : sheetH} + 16px)` }}
+      <button className="recenter-fab" style={{ bottom: `calc(${typeof sheetH === 'number' ? sheetH + 'px' : sheetH} + 16px)`, left: 16, right: 'auto' }}
               aria-label="me recentrer" onClick={() => {
                 if (!navigator.geolocation) {
                   showFeedback('Géolocalisation non disponible')
@@ -98,10 +98,7 @@ export default function Carte({ entries, onSelect }) {
         <CompassRoseIcon/>
       </button>
 
-      <div style={{ position: 'absolute', right: 12, top: 76, zIndex: 401, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none' }}>
-        <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.zoomIn()} aria-label="Zoom avant">+</button>
-        <button className="btn btn-paper" style={{ minHeight: 38, width: 38, padding: 0, pointerEvents: 'auto' }} onClick={() => mapApiRef.current?.zoomOut()} aria-label="Zoom arrière">−</button>
-      </div>
+
       {locError && (
         <div style={{ position: 'absolute', left: 12, right: 12, top: 76, zIndex: 401, textAlign: 'center', fontSize: 12, color: 'var(--alerte-deep)', pointerEvents: 'none' }}>
           {locError}
@@ -127,11 +124,7 @@ export default function Carte({ entries, onSelect }) {
             {sheet === 'full' ? 'glisser ↓ pour réduire' : 'tirer ↑ pour la liste'}
           </div>
         </div>
-        {sheet === 'peek' ? (
-          <div style={{ fontSize: 11.5, color: 'var(--encre-mute)', textAlign: 'center', pointerEvents: 'none' }}>
-            Carte libre · glisser la poignée vers le haut pour ouvrir la liste
-          </div>
-        ) : (
+        {sheet === 'peek' ? null : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'auto', maxHeight: 'calc(60dvh - 130px)' }}>
             {filtered.slice().reverse().map((e) => <RowItem key={e.id} e={e} onSelect={onSelect}/>)}
           </div>

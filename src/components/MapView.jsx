@@ -106,7 +106,7 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
           userAccuracyRef.current.setRadius(safeAccuracy)
         }
 
-        mapRef.current.setView([lat, lng], Math.max(15, mapRef.current.getZoom()))
+          mapRef.current.setView([lat, lng], Math.max(13, mapRef.current.getZoom()))
       },
       zoomIn: () => mapRef.current.zoomIn(),
       zoomOut: () => mapRef.current.zoomOut(),
