@@ -127,6 +127,8 @@ export default function App() {
 
   const onUpdate = async (id, patch) => {
     await db.updateEntry(id, patch)
+    // Optimistic update: reflect change immediately in UI before Drive sync
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, ...patch, updatedAt: Date.now() } : e))
     await syncPreviewIfNeeded('Mis à jour')
   }
 
