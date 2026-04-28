@@ -46,7 +46,7 @@ export default function App() {
   const tabRef = useRef(tab)
   const selectedRef = useRef(selected)
 
-  useEffect(() => { tabRef.current = tab }, [tab])
+  useEffect(() => { tabRef.current = tab; setToast(null) }, [tab])
   useEffect(() => { selectedRef.current = selected }, [selected])
 
   useEffect(() => {
@@ -289,7 +289,7 @@ export default function App() {
     <>
       {/* Mobile shell */}
       <div className="app-shell mobile-only">
-        {isPreview && <div className="banner-preview">Preview redesign partagee · memes donnees que la version classique</div>}
+        {isPreview && tab === 'reglages' && <div className="banner-preview">Preview · mêmes données que la version classique</div>}
         {!online && <div className="banner-offline">Hors ligne — les modifs sont conservées en local</div>}
         {tab === 'ajouter'  && <div className="screen"><AddForm onAdd={onAdd} onDone={() => setTab('liste')}/></div>}
         {tab === 'liste'    && <Liste entries={visibleEntries} onSelect={setSelected}/>} 
@@ -335,7 +335,7 @@ export default function App() {
         <aside className="right">
           <Liste entries={visibleEntries} onSelect={setSelected}/>
         </aside>
-        {isPreview && <div className="banner-preview desktop-preview">Preview redesign partagee · memes donnees que la version classique</div>}
+        {isPreview && tab === 'reglages' && <div className="banner-preview desktop-preview">Preview · mêmes données que la version classique</div>}
         {toast && <Toast kind={toast.kind} onClose={() => setToast(null)}>{toast.msg}</Toast>}
       </div>
     </>
