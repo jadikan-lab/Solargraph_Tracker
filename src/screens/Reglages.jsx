@@ -105,94 +105,76 @@ export default function Reglages({
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <ScreenTitle sub="listes & sync">Réglages</ScreenTitle>
-      {isPreview && (
-        <Card>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>Mode preview partage</div>
-            <div style={{ fontSize: 12.5, color: 'var(--encre-mute)', lineHeight: 1.45 }}>
-              Cette version lit et ecrit sur la meme base de donnees que la version classique.
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <Chip muted>storage: {runtime.storageName || 'solargraph_trk'}</Chip>
-              <Chip muted>drive: {runtime.driveFileName || 'solargraph_entries.json'}</Chip>
-            </div>
-          </div>
-        </Card>
-      )}
-      <StatusHero state={heroState} sub={syncSubline(driveState)} onAction={driveState.authenticated ? onSyncNow : onConnectDrive} actionLabel={driveState.authenticated ? 'Sync now' : 'Choisir le compte'} />
-      {isPreview && (
+      {isPreview ? (
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>Compte Google preview</div>
-                <div style={{ fontSize: 12.5, color: 'var(--encre-mute)', marginTop: 4 }}>
-                  {driveState.authenticated
-                    ? (driveState.email || driveState.name || 'Connecté')
-                    : 'Sélection explicite du compte pour la preview'}
+            {/* Compact account row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                background: driveState.authenticated ? '#22c55e' : '#f59e0b'
+              }}/>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {driveState.authenticated ? (driveState.email || driveState.name || 'Connecté') : 'Google Drive — non connecté'}
                 </div>
+                {driveState.lastSyncAt && (
+                  <div style={{ fontSize: 11.5, color: 'var(--encre-mute)' }}>
+                    sync {new Date(driveState.lastSyncAt).toLocaleString('fr-FR')}
+                  </div>
+                )}
               </div>
-              <Chip status={driveState.authenticated ? 'recupere' : 'alerte'}>{driveState.authenticated ? 'connecté' : 'déconnecté'}</Chip>
+              <Btn kind={driveState.authenticated ? 'ghost' : 'primary'} size="sm" onClick={onConnectDrive}>
+                {driveState.authenticated ? 'Changer' : 'Se connecter'}
+              </Btn>
             </div>
             {driveState.error && (
-              <div className="banner-error" style={{ margin: 0 }}>
-                <span>{driveState.error}</span>
-              </div>
+              <div className="banner-error" style={{ margin: 0 }}><span>{driveState.error}</span></div>
             )}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <Btn kind="primary" size="sm" onClick={onConnectDrive}>Choisir le compte</Btn>
-              <Btn kind="paper" size="sm" onClick={onSyncNow} disabled={!driveState.authenticated || driveState.syncing}>Synchroniser</Btn>
-              <Btn kind="success" size="sm" onClick={onPublishDrive} disabled={!driveState.authenticated || driveState.publishing}>
-                {driveState.publishing ? 'Publication…' : 'Publier sur Mon Drive'}
-              </Btn>
-              <Btn kind="secondary" size="sm" onClick={onCheckIntegrity} disabled={!driveState.authenticated || driveState.publishing}>
-                Vérifier intégrité
-              </Btn>
-              <Btn kind="secondary" size="sm" onClick={onConnectDrive}>Changer de compte</Btn>
-              <Btn kind="ghost" size="sm" onClick={onDisconnectDrive} disabled={!driveState.authenticated}>Déconnecter</Btn>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '6px 0' }}>
-              <div style={{ fontSize: 12.5, color: 'var(--encre)' }}>Auto-publier après chaque sync</div>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={!!driveState.autoPublishEnabled}
-                  onChange={(e) => onToggleAutoPublish?.(e.target.checked)}
-                />
-              </label>
-            </div>
-            {driveState.publishFolderLink && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                <a href={driveState.publishFolderLink} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--encre)', textDecoration: 'underline' }}>
-                  Ouvrir dossier Solargraph_Tracker
-                </a>
-                {driveState.publishSheetLink && (
-                  <a href={driveState.publishSheetLink} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--encre)', textDecoration: 'underline' }}>
-                    Ouvrir Google Sheet
-                  </a>
+            {driveState.authenticated && (
+              <>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <Btn kind="paper" size="sm" onClick={onSyncNow} disabled={driveState.syncing}>
+                    {driveState.syncing ? 'Sync…' : 'Synchroniser'}
+                  </Btn>
+                  <Btn kind="success" size="sm" onClick={onPublishDrive} disabled={driveState.publishing}>
+                    {driveState.publishing ? 'Publication…' : 'Publier'}
+                  </Btn>
+                  <Btn kind="secondary" size="sm" onClick={onCheckIntegrity} disabled={driveState.publishing}>Intégrité</Btn>
+                  <Btn kind="ghost" size="sm" onClick={onDisconnectDrive}>Déconnecter</Btn>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--encre)' }}>Auto-publier après sync</div>
+                  <input type="checkbox" checked={!!driveState.autoPublishEnabled} onChange={(e) => onToggleAutoPublish?.(e.target.checked)}/>
+                </div>
+                {driveState.publishFolderLink && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    <a href={driveState.publishFolderLink} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--encre)', textDecoration: 'underline' }}>
+                      Dossier Drive
+                    </a>
+                    {driveState.publishSheetLink && (
+                      <a href={driveState.publishSheetLink} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: 'var(--encre)', textDecoration: 'underline' }}>
+                        Google Sheet
+                      </a>
+                    )}
+                    {driveState.lastPublishAt && (
+                      <span style={{ fontSize: 12.5, color: 'var(--encre-mute)' }}>
+                        publié {new Date(driveState.lastPublishAt).toLocaleString('fr-FR')}
+                      </span>
+                    )}
+                  </div>
                 )}
-                {driveState.lastPublishAt && (
-                  <span style={{ fontSize: 12.5, color: 'var(--encre-mute)' }}>
-                    publié le {new Date(driveState.lastPublishAt).toLocaleString('fr-FR')}
-                  </span>
+                {(driveState.lastPublishMessage || driveState.integritySummary) && (
+                  <div style={{ fontSize: 12, lineHeight: 1.45, color: driveState.lastPublishStatus === 'error' ? 'var(--alerte-deep)' : 'var(--encre-mute)' }}>
+                    {driveState.lastPublishMessage || driveState.integritySummary}
+                  </div>
                 )}
-              </div>
+              </>
             )}
-            {(driveState.lastPublishMessage || driveState.integritySummary) && (
-              <div style={{ fontSize: 12.5, lineHeight: 1.45, color: driveState.lastPublishStatus === 'error' ? 'var(--alerte-deep)' : 'var(--encre-mute)' }}>
-                {driveState.lastPublishMessage || driveState.integritySummary}
-                {driveState.lastIntegrityCheckAt && (
-                  <span style={{ marginLeft: 6 }}>
-                    · contrôle {new Date(driveState.lastIntegrityCheckAt).toLocaleString('fr-FR')}
-                  </span>
-                )}
-              </div>
-            )}
-            <div style={{ fontSize: 12, color: 'var(--encre-mute)', lineHeight: 1.45 }}>
-              Le fichier cache Drive reste la source de sync. Le bouton de publication crée aussi un dossier visible dans Mon Drive avec photos + JSON + CSV + Sheet.
-            </div>
           </div>
         </Card>
+      ) : (
+        <StatusHero state={heroState} sub={syncSubline(driveState)} onAction={driveState.authenticated ? onSyncNow : onConnectDrive} actionLabel={driveState.authenticated ? 'Sync now' : 'Choisir le compte'} />
       )}
       <ListEditor title="Boîtes" items={boxItems} placeholder="Ajouter un type de boîte" onChange={updateBoxes}/>
       <ListEditor title="Diamètres" items={holeItems} placeholder="Ajouter un diamètre" onChange={updateHoles}/>
