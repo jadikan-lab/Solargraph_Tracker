@@ -53,8 +53,8 @@ export default function Carte({ entries, onSelect }) {
     if (dragYRef.current == null) return
     const endY = e.changedTouches?.[0]?.clientY ?? dragYRef.current
     const delta = endY - dragYRef.current
-    if (delta < -20) setSheet('full')
-    if (delta > 20) setSheet('peek')
+    if (delta < -50) setSheet('full')
+    if (delta > 50) setSheet('peek')
     dragYRef.current = null
   }
 

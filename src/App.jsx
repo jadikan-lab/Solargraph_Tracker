@@ -52,7 +52,7 @@ export default function App() {
   useEffect(() => {
     const load = async () => setEntries(await db.getEntries())
     load()
-    const iv = setInterval(load, 2000)
+    const iv = setInterval(load, 8000)
     const on = () => setOnline(true), off = () => setOnline(false)
     window.addEventListener('online', on); window.addEventListener('offline', off)
     return () => { clearInterval(iv); window.removeEventListener('online', on); window.removeEventListener('offline', off) }

@@ -125,13 +125,25 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
       const status = e.retrievalDate ? 'recupere' : 'enplace'
       const photo = mainPhoto(e)
       const marker = L.marker([e.location.lat, e.location.lng], { icon: makeIcon(status) })
-      const popup = L.popup({ maxWidth: 260 }).setContent(
-        `<div class="popup">
-          <div class="name">${(e.name && e.name.trim()) || 'Sténopé'}</div>
-          <div style="font-size:12px;color:#6b6253;margin-top:4px;">${e.boxType || '—'} · Ø${e.holeDiameter_mm} mm</div>
-          ${photo ? `<img src="${photo}" style="max-width:240px;max-height:140px;display:block;margin-top:8px;"/>` : ''}
-        </div>`
-      )
+      // Build popup with DOM to avoid XSS (no innerHTML with user data)
+      const popupEl = document.createElement('div')
+      popupEl.className = 'popup'
+      const nameEl = document.createElement('div')
+      nameEl.className = 'name'
+      nameEl.textContent = (e.name && e.name.trim()) || 'Sténopé'
+      popupEl.appendChild(nameEl)
+      const metaEl = document.createElement('div')
+      metaEl.style.cssText = 'font-size:12px;color:#6b6253;margin-top:4px;'
+      metaEl.textContent = `${e.boxType || '—'} · Ø${e.holeDiameter_mm} mm`
+      popupEl.appendChild(metaEl)
+      if (photo) {
+        const img = document.createElement('img')
+        img.src = photo
+        img.style.cssText = 'max-width:240px;max-height:140px;display:block;margin-top:8px;'
+        img.alt = ''
+        popupEl.appendChild(img)
+      }
+      const popup = L.popup({ maxWidth: 260 }).setContent(popupEl)
       marker.bindPopup(popup)
       if (onSelect) marker.on('click', () => onSelect(e))
       marker.addTo(layerRef.current)
