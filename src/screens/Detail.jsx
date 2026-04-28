@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import imageCompression from 'browser-image-compression'
 import { Btn, Card, Chip, Stat, ScreenTitle, ActionBar, StatusPill, Field, IconArrowL, IconArrowR, IconCheck, IconEdit, IconTrash, IconMore, IconPin, IconRefresh, IconPlus, IconChev } from '../ui.jsx'
 import MapView from '../components/MapView.jsx'
@@ -119,9 +119,9 @@ function DetailView({ entry, onBack, onUpdate, onDelete, onEdit, onRecuperer }) 
 }
 
 function EditView({ entry, onBack, onUpdate }) {
-  const boxTypes = useMemo(() => readList('solar_box_types', DEFAULT_BOX_TYPES), [])
-  const holeSizes = useMemo(() => readList('solar_holes', DEFAULT_HOLES), [])
-  const paperTypes = useMemo(() => readList('solar_papers', DEFAULT_PAPERS), [])
+  const boxTypes = readList('solar_box_types', DEFAULT_BOX_TYPES)
+  const holeSizes = readList('solar_holes', DEFAULT_HOLES)
+  const paperTypes = readList('solar_papers', DEFAULT_PAPERS)
   const [name, setName] = useState(entry.name || '')
   const [boxType, setBoxType] = useState(entry.boxType || boxTypes[0])
   const [holeDiameter, setHoleDiameter] = useState(toNumber(entry.holeDiameter_mm, toNumber(holeSizes[0], 0.26)))
