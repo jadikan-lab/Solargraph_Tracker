@@ -124,7 +124,9 @@ function EditView({ entry, onBack, onUpdate }) {
   const paperTypes = readList('solar_papers', DEFAULT_PAPERS)
   const [name, setName] = useState(entry.name || '')
   const [boxType, setBoxType] = useState(entry.boxType || boxTypes[0])
-  const [holeDiameter, setHoleDiameter] = useState(toNumber(entry.holeDiameter_mm, toNumber(holeSizes[0], 0.26)))
+  const [holeDiameter, setHoleDiameter] = useState(
+    entry.holeDiameter_mm != null ? String(entry.holeDiameter_mm) : (holeSizes[0] ?? '')
+  )
   const [paperType, setPaperType] = useState(entry.paperType || paperTypes[0])
   const [orientation, setOrientation] = useState(entry.orientation || '')
   const [notes, setNotes] = useState(entry.notes || '')
@@ -232,8 +234,8 @@ function EditView({ entry, onBack, onUpdate }) {
           </select>
         </Field>
         <Field label="Trou (Ø mm)">
-          <select className="select" value={holeDiameter} onChange={(e) => setHoleDiameter(Number(e.target.value))}>
-            {holeSizes.map((item) => <option key={item} value={toNumber(item, 0.26)}>{item}</option>)}
+          <select className="select" value={holeDiameter} onChange={(e) => setHoleDiameter(e.target.value)}>
+            {holeSizes.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         </Field>
       </div>
