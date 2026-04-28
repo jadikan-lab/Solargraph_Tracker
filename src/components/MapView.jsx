@@ -24,6 +24,10 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
   const userMarkerRef = useRef(null)
   const userAccuracyRef = useRef(null)
 
+  const onViewChangeRef = useRef(onViewChange)
+  useEffect(() => { onViewChangeRef.current = onViewChange }, [onViewChange])
+
+  // Init map once
   useEffect(() => {
     if (mapRef.current) return
     const startCenter = Array.isArray(initialView?.center) ? initialView.center : [48.8566, 2.3522]
@@ -52,12 +56,19 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
     layerRef.current = L.layerGroup().addTo(mapRef.current)
 
     const emitView = () => {
-      if (!onViewChange) return
+      if (!onViewChangeRef.current) return
       const c = mapRef.current.getCenter()
-      onViewChange({ center: [c.lat, c.lng], zoom: mapRef.current.getZoom() })
+      onViewChangeRef.current({ center: [c.lat, c.lng], zoom: mapRef.current.getZoom() })
     }
     mapRef.current.on('moveend zoomend', emitView)
 
+    return () => { mapRef.current?.off('moveend zoomend', emitView) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keep mapApiRef up to date whenever map is ready
+  useEffect(() => {
+    if (!mapRef.current || !mapApiRef) return
     const fitToEntries = () => {
       const valid = lastEntriesRef.current.filter((e) => e.location?.lat && e.location?.lng)
       if (!valid.length) return
@@ -65,50 +76,45 @@ export default function MapView({ entries, onSelect, embed = false, initialView,
       mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
     }
 
-    if (mapApiRef) {
-      mapApiRef.current = {
-        flyTo: ({ lat, lng, zoom = 16 }) => { if (lat && lng) mapRef.current.setView([lat, lng], zoom) },
-        showUserLocation: ({ lat, lng, accuracy }) => {
-          if (!lat || !lng) return
-          if (!userMarkerRef.current) {
-            userMarkerRef.current = L.circleMarker([lat, lng], {
-              radius: 7,
-              color: '#1f5de0',
-              weight: 2,
-              fillColor: '#2f7bff',
-              fillOpacity: 0.95,
-            }).addTo(mapRef.current)
-          } else {
-            userMarkerRef.current.setLatLng([lat, lng])
-          }
+    mapApiRef.current = {
+      flyTo: ({ lat, lng, zoom = 16 }) => { if (lat && lng) mapRef.current.setView([lat, lng], zoom) },
+      showUserLocation: ({ lat, lng, accuracy }) => {
+        if (!lat || !lng) return
+        if (!userMarkerRef.current) {
+          userMarkerRef.current = L.circleMarker([lat, lng], {
+            radius: 7,
+            color: '#1f5de0',
+            weight: 2,
+            fillColor: '#2f7bff',
+            fillOpacity: 0.95,
+          }).addTo(mapRef.current)
+        } else {
+          userMarkerRef.current.setLatLng([lat, lng])
+        }
 
-          const safeAccuracy = Number.isFinite(Number(accuracy)) ? Math.max(8, Number(accuracy)) : 24
-          if (!userAccuracyRef.current) {
-            userAccuracyRef.current = L.circle([lat, lng], {
-              radius: safeAccuracy,
-              color: '#2f7bff',
-              weight: 1,
-              fillColor: '#2f7bff',
-              fillOpacity: 0.12,
-            }).addTo(mapRef.current)
-          } else {
-            userAccuracyRef.current.setLatLng([lat, lng])
-            userAccuracyRef.current.setRadius(safeAccuracy)
-          }
+        const safeAccuracy = Number.isFinite(Number(accuracy)) ? Math.max(8, Number(accuracy)) : 24
+        if (!userAccuracyRef.current) {
+          userAccuracyRef.current = L.circle([lat, lng], {
+            radius: safeAccuracy,
+            color: '#2f7bff',
+            weight: 1,
+            fillColor: '#2f7bff',
+            fillOpacity: 0.12,
+          }).addTo(mapRef.current)
+        } else {
+          userAccuracyRef.current.setLatLng([lat, lng])
+          userAccuracyRef.current.setRadius(safeAccuracy)
+        }
 
-          mapRef.current.setView([lat, lng], Math.max(15, mapRef.current.getZoom()))
-        },
-        zoomIn: () => mapRef.current.zoomIn(),
-        zoomOut: () => mapRef.current.zoomOut(),
-        fitToEntries,
-      }
+        mapRef.current.setView([lat, lng], Math.max(15, mapRef.current.getZoom()))
+      },
+      zoomIn: () => mapRef.current.zoomIn(),
+      zoomOut: () => mapRef.current.zoomOut(),
+      fitToEntries,
     }
 
-    return () => {
-      mapRef.current?.off('moveend zoomend', emitView)
-      if (mapApiRef) mapApiRef.current = null
-    }
-  }, [embed, initialView, mapApiRef, onViewChange])
+    return () => { if (mapApiRef) mapApiRef.current = null }
+  }, [mapApiRef])
 
   useEffect(() => {
     if (!layerRef.current) return
