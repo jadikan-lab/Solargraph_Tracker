@@ -134,17 +134,13 @@ export default function Reglages({
             {driveState.authenticated && (
               <>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  <Btn kind="paper" size="sm" onClick={onSyncNow} disabled={driveState.syncing}>
-                    {driveState.syncing ? 'Sync…' : 'Synchroniser'}
-                  </Btn>
                   <Btn kind="success" size="sm" onClick={onPublishDrive} disabled={driveState.publishing}>
-                    {driveState.publishing ? 'Publication…' : 'Publier'}
+                    {driveState.publishing ? 'Export en cours…' : 'Exporter CSV + Sheet'}
                   </Btn>
-                  <Btn kind="secondary" size="sm" onClick={onCheckIntegrity} disabled={driveState.publishing}>Intégrité</Btn>
                   <Btn kind="ghost" size="sm" onClick={onDisconnectDrive}>Déconnecter</Btn>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <div style={{ fontSize: 12.5, color: 'var(--encre)' }}>Auto-publier après sync</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--encre)' }}>Export auto après chaque modif</div>
                   <input type="checkbox" checked={!!driveState.autoPublishEnabled} onChange={(e) => onToggleAutoPublish?.(e.target.checked)}/>
                 </div>
                 {driveState.publishFolderLink && (

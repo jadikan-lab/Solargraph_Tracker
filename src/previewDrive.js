@@ -407,6 +407,14 @@ async function uploadCsvToFolder(folderId, fileName, csvContent) {
   return created.id || null
 }
 
+async function driveDeleteItem(fileId) {
+  try {
+    await driveRequestJson(`https://www.googleapis.com/drive/v3/files/${fileId}`, { method: 'DELETE' })
+  } catch {
+    // Best-effort: ignore if already deleted.
+  }
+}
+
 async function uploadCsvAsSheet(folderId, sheetName, csvContent) {
   const existing = await driveFindFileInFolder(folderId, sheetName, 'application/vnd.google-apps.spreadsheet')
   if (existing?.id) {
@@ -549,6 +557,7 @@ export async function publishPreviewToMyDrive(entries) {
 
     const sorted = [...visibleEntries].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
     const indexById = new Map(sorted.map((entry, index) => [entry.id, index]))
+    const expectedFolderNames = new Set(sorted.map((entry, index) => entryFolderName(entry, index)))
 
     let uploadedPhotos = 0
     for (const entry of sorted) {
@@ -567,6 +576,14 @@ export async function publishPreviewToMyDrive(entries) {
       if (entry.finalPhotoDataURL) {
         const finalResult = await uploadImageToFolder(entryFolderId, entryFilename(entry, -1, true), entry.finalPhotoDataURL)
         if (finalResult.created) uploadedPhotos += 1
+      }
+    }
+
+    // Clean up orphan folders (deleted entries)
+    const allDriveFolders = await driveListFolders(mainFolderId)
+    for (const folder of allDriveFolders) {
+      if (!expectedFolderNames.has(folder.name)) {
+        await driveDeleteItem(folder.id)
       }
     }
 
